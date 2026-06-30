@@ -4,7 +4,7 @@ import * as brevo from '@getbrevo/brevo';
 import crypto from 'crypto';
 import contractSchema from '@temperaturcrowd/contract/schema.json';
 import { db, initDb } from './db';
-import { oprfAuth } from './oprf';
+import { blindRsaAuth } from './blind_rsa';
 
 const server = fastify({ logger: true });
 
@@ -37,14 +37,18 @@ server.addHook('preHandler', async (request, reply) => {
     
     const [xHex, tokenHex] = parts;
     
-    const isValid = await oprfAuth.verifyToken(xHex, tokenHex);
+    const isValid = await blindRsaAuth.verifyToken(xHex, tokenHex);
     if (!isValid) {
-      reply.code(401).send({ error: 'Invalid OPRF token' });
+      reply.code(401).send({ error: 'Invalid auth token' });
       return;
     }
     
     request.donor = { id: xHex };
   }
+});
+
+server.get('/v1/auth/public-key', async (request, reply) => {
+  reply.send(blindRsaAuth.getPublicKey());
 });
 
 // 1. Client requests a magic link
@@ -123,7 +127,7 @@ server.get('/v1/auth/verify', async (request, reply) => {
   }
   
   try {
-    const evaluated = await oprfAuth.evaluateBlinded(session.blinded_element);
+    const evaluated = await blindRsaAuth.signBlinded(session.blinded_element);
     
     await db.updateTable('auth_sessions')
       .set({
