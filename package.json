@@ -1,0 +1,11 @@
+{
+  "name": "temperaturcrowd-server",
+  "version": "1.0.0",
+  "description": "TemperaturCrowd Monorepo",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm -r dev",
+    "build": "pnpm -r build",
+    "start": "pnpm -r start"
+  }
+}

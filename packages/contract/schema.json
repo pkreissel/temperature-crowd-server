@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "IngestPayload",
+  "title": "IngestPayload",
+  "type": "object",
+  "properties": {
+    "device_id": {
+      "type": "string",
+      "description": "Unique identifier for the device within the user's scope"
+    },
+    "api_key": {
+      "type": "string",
+      "description": "The RFC 9474 blind-signed credential for the user"
+    },
+    "postal_code": {
+      "type": "string",
+      "description": "The postal code/location provided by the user"
+    },
+    "readings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp in ISO 8601 UTC format"
+          },
+          "temp_c": {
+            "type": "number",
+            "description": "Measured temperature in Celsius (hourly mean or point-in-time)"
+          },
+          "temp_c_min": {
+            "type": "number",
+            "description": "Hourly minimum temperature in Celsius"
+          },
+          "temp_c_max": {
+            "type": "number",
+            "description": "Hourly maximum temperature in Celsius"
+          },
+          "rh_pct": {
+            "type": "number",
+            "description": "Relative humidity percentage"
+          },
+          "room_ref": {
+            "type": "string",
+            "description": "Reference identifier for the room"
+          }
+        },
+        "required": ["ts", "temp_c"]
+      },
+      "minItems": 1
+    }
+  },
+  "required": ["device_id", "api_key", "readings"]
+}
