@@ -1,6 +1,6 @@
-import { Database } from 'bun:sqlite';
+import { createClient } from '@libsql/client';
 import { Kysely, sql } from 'kysely';
-import { BunSqliteDialect } from 'kysely-bun-sqlite';
+import { LibsqlDialect } from '@libsql/kysely-libsql';
 
 export interface Reading {
   id?: number;
@@ -42,10 +42,27 @@ export interface Tier2PublicCohort {
 
 export interface AuthSession {
   session_id: string;
-  email: string;
+  phone_number: string;
+  otp_code: string;
   blinded_element: string;
   status: 'pending' | 'verified';
   evaluated_element: string | null;
+  attempts: number;
+  expires_at: string;
+  created_at?: string;
+}
+
+export interface DonorMetadata {
+  donor_id: string;
+  building_age: string | null;
+  floor_level: string | null;
+  orientation: string | null;
+  insulation_status: string | null;
+  updated_at?: string;
+}
+
+export interface RegisteredPhone {
+  phone_hmac: string;
   created_at?: string;
 }
 
@@ -54,13 +71,20 @@ export interface DatabaseSchema {
   readings: Reading;
   tier1_room_metrics: Tier1RoomMetric;
   tier2_public_cohorts: Tier2PublicCohort;
+  donor_metadata: DonorMetadata;
+  registered_phones: RegisteredPhone;
 }
 
-const sqlite = new Database('temperaturcrowd.db');
+const dbUrl = process.env.DATABASE_URL || 'file:temperaturcrowd.db';
+
+const libsqlClient = createClient({
+  url: dbUrl,
+  authToken: process.env.DATABASE_AUTH_TOKEN,
+});
 
 export const db = new Kysely<DatabaseSchema>({
-  dialect: new BunSqliteDialect({
-    database: sqlite,
+  dialect: new LibsqlDialect({
+    client: libsqlClient,
   }),
 });
 
@@ -70,10 +94,13 @@ export async function initDb() {
     .createTable('auth_sessions')
     .ifNotExists()
     .addColumn('session_id', 'text', (cb) => cb.primaryKey())
-    .addColumn('email', 'text', (cb) => cb.notNull())
+    .addColumn('phone_number', 'text', (cb) => cb.notNull())
+    .addColumn('otp_code', 'text', (cb) => cb.notNull())
     .addColumn('blinded_element', 'text', (cb) => cb.notNull())
     .addColumn('status', 'text', (cb) => cb.notNull().defaultTo('pending'))
     .addColumn('evaluated_element', 'text')
+    .addColumn('attempts', 'integer', (cb) => cb.notNull().defaultTo(0))
+    .addColumn('expires_at', 'text', (cb) => cb.notNull())
     .addColumn('created_at', 'timestamp', (cb) => cb.defaultTo(sql`CURRENT_TIMESTAMP`))
     .execute();
 
@@ -121,5 +148,23 @@ export async function initDb() {
     .addColumn('avg_hours_above_26', 'real', (cb) => cb.notNull())
     .addColumn('avg_max_temp', 'real', (cb) => cb.notNull())
     .addColumn('last_updated', 'timestamp', (cb) => cb.defaultTo(sql`CURRENT_TIMESTAMP`))
+    .execute();
+
+  await db.schema
+    .createTable('donor_metadata')
+    .ifNotExists()
+    .addColumn('donor_id', 'text', (cb) => cb.primaryKey())
+    .addColumn('building_age', 'text')
+    .addColumn('floor_level', 'text')
+    .addColumn('orientation', 'text')
+    .addColumn('insulation_status', 'text')
+    .addColumn('updated_at', 'timestamp', (cb) => cb.defaultTo(sql`CURRENT_TIMESTAMP`))
+    .execute();
+
+  await db.schema
+    .createTable('registered_phones')
+    .ifNotExists()
+    .addColumn('phone_hmac', 'text', (cb) => cb.primaryKey())
+    .addColumn('created_at', 'timestamp', (cb) => cb.defaultTo(sql`CURRENT_TIMESTAMP`))
     .execute();
 }

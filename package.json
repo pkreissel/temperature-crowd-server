@@ -7,5 +7,9 @@
     "dev": "pnpm -r dev",
     "build": "pnpm -r build",
     "start": "pnpm -r start"
+  },
+  "dependencies": {
+    "@seven.io/client": "^5.6.0",
+    "api": "^6.1.3"
   }
 }

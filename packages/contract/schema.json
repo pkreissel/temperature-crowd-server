@@ -16,6 +16,18 @@
       "type": "string",
       "description": "The postal code/location provided by the user"
     },
+    "building_age": {
+      "type": ["string", "null"]
+    },
+    "floor_level": {
+      "type": ["string", "null"]
+    },
+    "orientation": {
+      "type": ["string", "null"]
+    },
+    "insulation_status": {
+      "type": ["string", "null"]
+    },
     "readings": {
       "type": "array",
       "items": {

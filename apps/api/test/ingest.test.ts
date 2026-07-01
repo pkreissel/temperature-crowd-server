@@ -1,99 +1,34 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
-import fastify from 'fastify';
-import contractSchema from '@temperaturcrowd/contract/schema.json';
+import { server } from '../src/index';
 import { db, initDb } from '../src/db';
-import { sql } from 'kysely';
-import { oprfAuth } from '../src/oprf';
-
-// We build a test server instance exactly like index.ts
-const buildServer = async () => {
-  const app = fastify();
-  
-  await initDb();
-  
-  // Clean DB for tests
-  await db.deleteFrom('auth_sessions').execute();
-  await db.deleteFrom('readings').execute();
-
-  app.decorateRequest('donor', null);
-
-  app.addHook('preHandler', async (request, reply) => {
-    if (request.routerPath === '/v1/ingest') {
-      const payload = request.body as any;
-      if (!payload?.api_key || typeof payload.api_key !== 'string') {
-        reply.code(401).send({ error: 'Missing or invalid api_key' });
-        return reply;
-      }
-      const parts = payload.api_key.split(':');
-      if (parts.length !== 2) {
-        reply.code(401).send({ error: 'Invalid api_key format' });
-        return reply;
-      }
-      const [xHex, tokenHex] = parts;
-      const isValid = await oprfAuth.verifyToken(xHex, tokenHex);
-      if (!isValid) {
-        reply.code(401).send({ error: 'Invalid OPRF token' });
-        return reply;
-      }
-      request.donor = { id: xHex };
-    }
-  });
-
-  app.post('/v1/auth/request-link', async (request, reply) => {
-    const { email, blinded_element } = request.body as any;
-    const sessionId = "test-session-id";
-    await db.insertInto('auth_sessions').values({
-      session_id: sessionId,
-      email,
-      blinded_element,
-      status: 'pending'
-    }).execute();
-    reply.send({ session_id: sessionId, status: 'pending' });
-  });
-
-  app.get('/v1/auth/verify', async (request, reply) => {
-    const { session_id } = request.query as any;
-    const session = await db.selectFrom('auth_sessions').where('session_id', '=', session_id).selectAll().executeTakeFirst();
-    const evaluated = await oprfAuth.evaluateBlinded(session!.blinded_element);
-    
-    await db.updateTable('auth_sessions').set({ status: 'verified', evaluated_element: Buffer.from(evaluated).toString('hex') })
-      .where('session_id', '=', session_id).execute();
-      
-    reply.type('text/html').send('<h1>Successfully Verified!</h1>');
-  });
-
-  app.get('/v1/auth/poll/:session_id', async (request, reply) => {
-    const { session_id } = request.params as any;
-    const session = await db.selectFrom('auth_sessions').where('session_id', '=', session_id).select(['status', 'evaluated_element']).executeTakeFirst();
-    if (session!.status === 'verified') reply.send({ status: 'verified', evaluated_element: session!.evaluated_element });
-    else reply.send({ status: 'pending' });
-  });
-
-  app.post('/v1/ingest', async (request, reply) => {
-    const payload = request.body as any;
-    reply.send({ status: 'ok', received_readings: payload.readings?.length || 0, donor_id: request.donor?.id });
-  });
-
-  return app;
-};
+import { blindRsaAuth } from '../src/blind_rsa';
 
 describe('Ingest API', () => {
   let app: any;
   let baseUrl: string;
-  let originalEvaluateBlinded: any;
+  let originalSignBlinded: any;
 
   beforeAll(async () => {
-    originalEvaluateBlinded = oprfAuth.evaluateBlinded;
-    oprfAuth.evaluateBlinded = async () => new Uint8Array([1, 2, 3]);
+    process.env.PHONE_HMAC_SECRET = 'test-secret';
+    process.env.SEVEN_API_KEY = '';
+    originalSignBlinded = blindRsaAuth.signBlinded;
+    blindRsaAuth.signBlinded = async () => '01020304'; // Mocked hex string signature
 
-    app = await buildServer();
+    await initDb();
+    
+    // Clean DB for tests
+    await db.deleteFrom('auth_sessions').execute();
+    await db.deleteFrom('readings').execute();
+    await db.deleteFrom('registered_phones').execute();
+
+    app = server;
     await app.listen({ port: 0 });
     const address = app.server.address();
     baseUrl = `http://localhost:${address.port}`;
   });
 
   afterAll(async () => {
-    oprfAuth.evaluateBlinded = originalEvaluateBlinded;
+    blindRsaAuth.signBlinded = originalSignBlinded;
     await app.close();
   });
 
@@ -111,33 +46,51 @@ describe('Ingest API', () => {
     expect(response.status).toBe(401);
   });
 
-  // Note: An end-to-end test including the client-side blinding would go here, 
-  // but it requires a VoprfClient setup in the test.
-
-  it('handles magic link flow successfully', async () => {
-    // 1. Request link
-    const requestRes = await fetch(`${baseUrl}/v1/auth/request-link`, {
+  it('handles web-based sms otp flow successfully', async () => {
+    // 1. Init Session
+    const initRes = await fetch(`${baseUrl}/v1/auth/init`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: 'test@gmail.com',
         blinded_element: '01020304' // hex
+      })
+    });
+    expect(initRes.status).toBe(200);
+    const initData: any = await initRes.json();
+    const sessionId = initData.session_id;
+
+    // 2. Request OTP (with mock Turnstile)
+    const requestRes = await fetch(`${baseUrl}/v1/auth/request-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: sessionId,
+        phone_number: '+4915112345678',
+        'cf-turnstile-response': 'valid-token'
       })
     });
     
     expect(requestRes.status).toBe(200);
-    const requestData: any = await requestRes.json();
-    expect(requestData.session_id).toBeDefined();
-    const sessionId = requestData.session_id;
     
-    // 2. Verify link
-    const verifyRes = await fetch(`${baseUrl}/v1/auth/verify?session_id=${sessionId}`);
+    // Fetch the randomly generated OTP from DB
+    const session = await db.selectFrom('auth_sessions').where('session_id', '=', sessionId).selectAll().executeTakeFirst();
+    const otpCode = session!.otp_code;
+    
+    // 3. Verify OTP
+    const verifyRes = await fetch(`${baseUrl}/v1/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: sessionId,
+        otp_code: otpCode
+      })
+    });
     
     expect(verifyRes.status).toBe(200);
-    const verifyHtml = await verifyRes.text();
-    expect(verifyHtml).toContain('Successfully Verified');
+    const verifyData: any = await verifyRes.json();
+    expect(verifyData.status).toBe('ok');
     
-    // 3. Poll for result
+    // 4. Poll for result
     const pollRes = await fetch(`${baseUrl}/v1/auth/poll/${sessionId}`);
     
     expect(pollRes.status).toBe(200);
