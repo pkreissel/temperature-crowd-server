@@ -4,6 +4,8 @@ build/
 *.log
 *.db
 .env
-*.pem.DS_Store
+*.pem
 bun.lockb
 package-lock.json
+*/.DS_Store
+.DS_Store

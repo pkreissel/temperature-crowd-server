@@ -42,3 +42,16 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Trigger Rolling Update on Bunny.net
+        # Only run this step if the build was successful
+        if: success()
+        uses: BunnyWay/actions/container-update-image@main
+        with:
+          # These secrets/vars need to be configured in your GitHub repository settings
+          app_id: ${{ vars.BUNNYNET_APP_ID }}
+          api_key: ${{ secrets.BUNNYNET_API_KEY }}
+          # The name of your container as configured in Bunny.net
+          container: "temperaturcrowd-api"
+          # Since the meta action outputs multiple tags, we use the primary branch/sha tag
+          image_tag: "main"

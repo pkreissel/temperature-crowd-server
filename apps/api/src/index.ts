@@ -6,7 +6,16 @@ import contractSchema from '@temperaturcrowd/contract/schema.json';
 import * as crypto from 'crypto';
 import { runRecomputeJob } from './jobs/recompute';
 
-export const server = fastify({ logger: true });
+export const server = fastify({ 
+  logger: true,
+  trustProxy: true // Trust the CDN (Bunny CDN) to pass the correct client IP
+});
+
+// Allow cross-origin requests through the CDN
+import cors from '@fastify/cors';
+server.register(cors, {
+  origin: '*' // Note: You might want to restrict this to your specific domains later
+});
 
 // Custom auth middleware for OPRF
 server.decorateRequest('donor', null);
@@ -497,8 +506,9 @@ export const start = async () => {
   try {
     await initDb();
     server.log.info('Database initialized');
-    await server.listen({ port: 3000, host: '0.0.0.0' });
-    server.log.info('Server listening on 3000');
+    const port = parseInt(process.env.PORT || '3000', 10);
+    await server.listen({ port, host: '0.0.0.0' });
+    server.log.info(`Server listening on ${port}`);
     
     // Start hourly recompute job
     setInterval(() => {
