@@ -25,7 +25,6 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('temp_c', 'real', (cb) => cb.notNull())
     .addColumn('temp_c_min', 'real')
     .addColumn('temp_c_max', 'real')
-    .addColumn('rh_pct', 'real')
     .addColumn('room_ref', 'text')
     .addColumn('postal_code', 'text')
     .addColumn('created_at', 'timestamp', (cb) => cb.defaultTo(sql`CURRENT_TIMESTAMP`))

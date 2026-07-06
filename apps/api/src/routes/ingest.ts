@@ -11,7 +11,6 @@ async function insertReadings(payload: any, donorId: string) {
     temp_c: r.temp_c,
     temp_c_min: r.temp_c_min ?? null,
     temp_c_max: r.temp_c_max ?? null,
-    rh_pct: r.rh_pct ?? null,
     room_ref: r.room_ref ?? null,
     postal_code: payload.postal_code ?? null
   }));
@@ -24,7 +23,6 @@ async function insertReadings(payload: any, donorId: string) {
         temp_c: (eb) => eb.ref('excluded.temp_c'),
         temp_c_min: (eb) => eb.ref('excluded.temp_c_min'),
         temp_c_max: (eb) => eb.ref('excluded.temp_c_max'),
-        rh_pct: (eb) => eb.ref('excluded.rh_pct'),
         room_ref: (eb) => eb.ref('excluded.room_ref')
       })
     )

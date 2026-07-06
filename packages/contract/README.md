@@ -12,7 +12,6 @@ Reading (one row):
       "temp_c": 27.4,
       "temp_c_min": 27.1,
       "temp_c_max": 30.4,
-      "rh_pct": 52.0,
       "room_ref": "schlafzimmer" }
   ]
 }

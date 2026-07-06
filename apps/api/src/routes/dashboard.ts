@@ -1,14 +1,11 @@
 import { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
-import fs from 'fs';
-import path from 'path';
-
-// Load HTML once
-const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf-8');
 
 const dashboardRoutes: FastifyPluginAsync = async (server) => {
   server.get('/', async (request, reply) => {
-    reply.header('Cache-Control', 'public, max-age=60').type('text/html').send(indexHtml);
+    // @fastify/static owns the Cache-Control header, so set the TTL via its maxAge option
+    // (a manual reply.header is overwritten by sendFile).
+    return reply.sendFile('index.html', { maxAge: 60_000 });
   });
 
   server.get('/v1/dashboard/public', async (request, reply) => {

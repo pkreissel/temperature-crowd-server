@@ -77,3 +77,25 @@ it counts *residents* from a static public mask. Donor-k is purely a server-side
   bitmask**. Tracked in client ADR-0004.
 - New server build artifact: a **Zensus → safe-cell bitmask** generator (run once per T/basis/
   vintage), output shipped with the integration release.
+
+## Implementation status (2026-07-06)
+The two-tier build and the k-anon publish filter are implemented and match the decision; the
+spatial and at-rest-floor parts are approximated pending the client-side grid work. Deviations
+from the target above, all tracked as follow-ups:
+
+- **Spatial unit is a PLZ hierarchy, not the INSPIRE grid (yet).** The client currently transmits
+  only `postal_code`, so the server merges over nested cells `plz5 → plz3 → plz1 → national`
+  (`jobs/grid.ts`) instead of INSPIRE 1/10/100 km. The hierarchy is still strictly nested, so
+  merge-up stays exact. Swapping in a client-emitted INSPIRE cell is a drop-in replacement of
+  `cellsForPostalCode` — the rest of the recompute is unchanged. Requires the client to compute
+  and emit the ETRS89-LAEA cell first (client ADR-0004).
+- **At-rest floor (Zensus safe-cell bitmask) not built.** Only the **display floor** (k=10
+  distinct donors, enforced at Tier-2 build in `jobs/cohorts.ts`) is live. The census-resident
+  at-rest guarantee still needs the bitmask generator and the client-side membership test.
+- **k=10 with merge-up is implemented**: sub-threshold cells roll up the hierarchy and are never
+  written; if even the national cell has < 10 donors, nothing is published.
+- **Storage engine is libSQL/SQLite (Bunny DB), not TimescaleDB.** No hypertable / continuous
+  aggregates; recompute is a full batch rebuild of both tiers in one transaction, which suits the
+  low hourly volume. Revisit if raw volume outgrows single-node SQLite.
+- **Climate region** is derived server-side from PLZ via a coarse 2-digit table
+  (`jobs/climate_regions.ts`), a placeholder for the authoritative DIN 4108-2 map (ADR-0005).

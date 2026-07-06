@@ -5,6 +5,8 @@ import { blindRsaAuth } from './blind_rsa';
 import { runRecomputeJob } from './jobs/recompute';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
+import fastifyStatic from '@fastify/static';
+import path from 'path';
 
 import dashboardRoutes from './routes/dashboard';
 import authRoutes from './routes/auth';
@@ -33,6 +35,12 @@ server.register(cors, {
 server.register(rateLimit, {
   max: 100, // default limit
   timeWindow: '1 minute'
+});
+
+// Serve static HTML assets from ./public via `reply.sendFile` (no auto-routing).
+server.register(fastifyStatic, {
+  root: path.join(__dirname, 'public'),
+  serve: false
 });
 
 async function verifyApiKey(payloadApiKey: any, authHeader: string | undefined): Promise<string | null> {

@@ -50,10 +50,6 @@
             "type": "number",
             "description": "Hourly maximum temperature in Celsius"
           },
-          "rh_pct": {
-            "type": "number",
-            "description": "Relative humidity percentage"
-          },
           "room_ref": {
             "type": "string",
             "description": "Reference identifier for the room"

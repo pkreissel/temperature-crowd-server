@@ -106,7 +106,7 @@ describe('Ingest API', () => {
     expect(pollRes.status).toBe(200);
     const pollData: any = await pollRes.json();
     expect(pollData.status).toBe('verified');
-    expect(pollData.evaluated_element).toBeDefined();
+    expect(pollData.blind_signature).toBeDefined();
   });
 
   it('sends SMS via seven.io client when API key is configured', async () => {

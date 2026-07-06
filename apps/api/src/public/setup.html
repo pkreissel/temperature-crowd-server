@@ -1,12 +1,10 @@
-export function getSetupHtml(turnstileSiteKey: string, session_id: string): string {
-  return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TemperaturCrowd Verification</title>
-  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTurnstileLoad&render=explicit" async defer></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f3f4f6; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
     .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); max-width: 400px; width: 100%; text-align: center; }
@@ -26,7 +24,7 @@ export function getSetupHtml(turnstileSiteKey: string, session_id: string): stri
     <div id="error1" class="error hidden"></div>
     <form id="phoneForm">
       <input type="tel" id="phone" placeholder="+49 151 12345678" required>
-      <div class="cf-turnstile" data-sitekey="${turnstileSiteKey}" data-theme="light" style="margin-bottom: 1rem;"></div>
+      <div id="turnstile-container" style="margin-bottom: 1rem; display: flex; justify-content: center;"></div>
       <button type="submit" id="sendBtn">Send SMS Code</button>
     </form>
   </div>
@@ -36,7 +34,7 @@ export function getSetupHtml(turnstileSiteKey: string, session_id: string): stri
     <p>We sent a 6-digit code to your phone. Enter it below.</p>
     <div id="error2" class="error hidden"></div>
     <form id="otpForm">
-      <input type="text" id="otp" placeholder="123456" pattern="\\d{6}" maxlength="6" required>
+      <input type="text" id="otp" placeholder="123456" pattern="\d{6}" maxlength="6" required>
       <button type="submit" id="verifyBtn">Verify</button>
     </form>
   </div>
@@ -47,7 +45,7 @@ export function getSetupHtml(turnstileSiteKey: string, session_id: string): stri
   </div>
 
   <script>
-    const sessionId = "${session_id}";
+    const sessionId = new URLSearchParams(window.location.search).get('session_id');
     const phoneForm = document.getElementById('phoneForm');
     const otpForm = document.getElementById('otpForm');
     const step1 = document.getElementById('step1');
@@ -56,22 +54,43 @@ export function getSetupHtml(turnstileSiteKey: string, session_id: string): stri
     const error1 = document.getElementById('error1');
     const error2 = document.getElementById('error2');
     const sendBtn = document.getElementById('sendBtn');
-    
+
+    // No session id in the URL → nothing can be verified; block the flow up front.
+    if (!sessionId) {
+      error1.textContent = 'Missing session id. Please restart setup from Home Assistant.';
+      error1.classList.remove('hidden');
+      sendBtn.disabled = true;
+    }
+
+    // Turnstile explicit render: the api.js loader calls this once ready. We fetch the public
+    // site key from /v1/config and render the widget, which injects the hidden
+    // `cf-turnstile-response` input the form reads on submit.
+    window.onTurnstileLoad = async () => {
+      try {
+        const res = await fetch('/v1/config');
+        const { turnstileSiteKey } = await res.json();
+        window.turnstile.render('#turnstile-container', { sitekey: turnstileSiteKey, theme: 'light' });
+      } catch (err) {
+        error1.textContent = 'Failed to load the CAPTCHA. Please reload the page.';
+        error1.classList.remove('hidden');
+      }
+    };
+
     phoneForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const phone = document.getElementById('phone').value;
       const turnstileResponse = document.querySelector('[name="cf-turnstile-response"]').value;
-      
+
       if (!turnstileResponse) {
         error1.textContent = 'Please complete the CAPTCHA.';
         error1.classList.remove('hidden');
         return;
       }
-      
+
       sendBtn.disabled = true;
       sendBtn.textContent = 'Sending...';
       error1.classList.add('hidden');
-      
+
       try {
         const res = await fetch('/v1/auth/request-otp', {
           method: 'POST',
@@ -79,7 +98,7 @@ export function getSetupHtml(turnstileSiteKey: string, session_id: string): stri
           body: JSON.stringify({ session_id: sessionId, phone_number: phone, 'cf-turnstile-response': turnstileResponse })
         });
         const data = await res.json();
-        
+
         if (res.ok) {
           step1.classList.add('hidden');
           step2.classList.remove('hidden');
@@ -101,11 +120,11 @@ export function getSetupHtml(turnstileSiteKey: string, session_id: string): stri
       e.preventDefault();
       const otp = document.getElementById('otp').value;
       const verifyBtn = document.getElementById('verifyBtn');
-      
+
       verifyBtn.disabled = true;
       verifyBtn.textContent = 'Verifying...';
       error2.classList.add('hidden');
-      
+
       try {
         const res = await fetch('/v1/auth/verify-otp', {
           method: 'POST',
@@ -113,7 +132,7 @@ export function getSetupHtml(turnstileSiteKey: string, session_id: string): stri
           body: JSON.stringify({ session_id: sessionId, otp_code: otp })
         });
         const data = await res.json();
-        
+
         if (res.ok) {
           step2.classList.add('hidden');
           step3.classList.remove('hidden');
@@ -132,5 +151,3 @@ export function getSetupHtml(turnstileSiteKey: string, session_id: string): stri
   </script>
 </body>
 </html>
-  `;
-}

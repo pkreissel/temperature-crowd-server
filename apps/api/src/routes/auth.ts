@@ -1,51 +1,13 @@
 import { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
 import { blindRsaAuth } from '../blind_rsa';
-import { Client, SmsResource } from '@seven.io/client';
 import * as crypto from 'crypto';
-import { getSetupHtml } from './setupHtml';
-
-async function verifyTurnstile(response: string): Promise<boolean> {
-  const secret = process.env.TURNSTILE_SECRET_KEY || '1x0000000000000000000000000000000AA';
-  const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `secret=${encodeURIComponent(secret)}&response=${encodeURIComponent(response)}`
-  });
-  const data = await res.json();
-  return data.success;
-}
-
-function normalizeAndValidatePhone(phone_number: string): string | null {
-  const normalizedPhone = phone_number.replace(/\s+/g, '').replace(/^00/, '+');
-  if (!/^\+49[1-9]\d{6,14}$/.test(normalizedPhone)) {
-    return null;
-  }
-  return normalizedPhone;
-}
-
-async function sendOtpSms(normalizedPhone: string, otpCode: string, serverLogger: any) {
-  const sevenApiKey = process.env.SEVEN_API_KEY;
-  if (!sevenApiKey) {
-    serverLogger.warn(`No SEVEN_API_KEY. OTP is ${otpCode}`);
-    return true;
-  }
-  try {
-    const client = new Client({ apiKey: sevenApiKey });
-    const sms = new SmsResource(client);
-    await sms.dispatch({ to: [normalizedPhone], from: 'TempCrowd', text: `OTP: ${otpCode}` });
-    return true;
-  } catch (err) {
-    serverLogger.error(err, 'Failed to send SMS');
-    return false;
-  }
-}
+import { normalizeAndValidatePhone, sendOtpSms, verifyTurnstile } from './helpers/authHelpers';
 
 const authRoutes: FastifyPluginAsync = async (server) => {
-  // These responses are per-session (the session_id is baked into the setup
-  // HTML, and poll/verify reflect live session state). The CDN in front of the
-  // origin (Bunny) otherwise caches GETs with a long TTL and ignores the query
-  // string, serving one user's session to everyone. Never let them be cached.
+  // These responses reflect live session state (poll/verify), so they must never be cached.
+  // The CDN in front of the origin (Bunny) otherwise caches GETs with a long TTL and ignores
+  // the query string, which would serve one user's session to everyone.
   server.addHook('onSend', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
   });
@@ -79,21 +41,15 @@ const authRoutes: FastifyPluginAsync = async (server) => {
     reply.send({ session_id: sessionId, status: 'pending' });
   });
 
+  // Static setup page. The page reads `session_id` from its own URL and fetches the Turnstile
+  // site key from /v1/config, so nothing is templated server-side.
   server.get('/v1/auth/setup', async (request, reply) => {
-    const { session_id } = request.query as any;
-    if (!session_id || typeof session_id !== 'string') {
-      reply.code(400).send('Missing session_id');
-      return;
-    }
+    return reply.sendFile('setup.html');
+  });
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(session_id)) {
-      reply.code(400).send('Invalid session_id format');
-      return;
-    }
-    
-    const turnstileSiteKey = process.env.TURNSTILE_SITE_KEY || '1x00000000000000000000AA';
-    reply.type('text/html').send(getSetupHtml(turnstileSiteKey, session_id));
+  // Public Turnstile site key for the setup page (safe to expose — it is not the secret key).
+  server.get('/v1/config', async (request, reply) => {
+    reply.send({ turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || '1x00000000000000000000AA' });
   });
 
 async function getValidSessionOrReply(session_id: string, reply: any, logger: any) {
@@ -194,20 +150,20 @@ async function getValidSessionOrReply(session_id: string, reply: any, logger: an
     }
     
     try {
-      const evaluated = await blindRsaAuth.signBlinded(session.blinded_element);
+      const blindSignature = await blindRsaAuth.signBlinded(session.blinded_element);
       const phoneHmac = session.phone_hmac;
-      
+
       try {
         await db.insertInto('registered_phones').values({ phone_hmac: phoneHmac }).execute();
       } catch {
         return reply.code(400).send({ error: 'Phone already registered' });
       }
-      
+
       await db.updateTable('auth_sessions')
-        .set({ status: 'verified', evaluated_element: evaluated, phone_hmac: '', otp_code: '' })
+        .set({ status: 'verified', blind_signature: blindSignature, phone_hmac: '', otp_code: '' })
         .where('session_id', '=', session_id).execute();
-        
-      reply.send({ status: 'ok', evaluated_element: evaluated });
+
+      reply.send({ status: 'ok', blind_signature: blindSignature });
     } catch (err) {
       server.log.error(err, 'Verification failed');
       reply.code(500).send({ error: 'Verification failed' });
@@ -216,9 +172,9 @@ async function getValidSessionOrReply(session_id: string, reply: any, logger: an
 
   server.get('/v1/auth/poll/:session_id', async (request, reply) => {
     const { session_id } = request.params as any;
-    const session = await db.selectFrom('auth_sessions').where('session_id', '=', session_id).select(['status', 'evaluated_element']).executeTakeFirst();
+    const session = await db.selectFrom('auth_sessions').where('session_id', '=', session_id).select(['status', 'blind_signature']).executeTakeFirst();
     if (!session) return reply.code(404).send({ error: 'Not found' });
-    if (session.status === 'verified') return reply.send({ status: 'verified', evaluated_element: session.evaluated_element });
+    if (session.status === 'verified') return reply.send({ status: 'verified', blind_signature: session.blind_signature });
     reply.send({ status: 'pending' });
   });
 };

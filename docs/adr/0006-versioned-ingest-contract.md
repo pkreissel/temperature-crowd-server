@@ -25,14 +25,15 @@ and form-encoded (Ecowitt) at the edge.
 { "device_id": "shelly-ht-3c61", "api_key": "donor-scoped-secret",
   "readings": [ { "ts": "2026-06-28T12:00:00Z", "temp_c": 27.4,
                   "temp_c_min": 27.1, "temp_c_max": 30.4,
-                  "rh_pct": 52.0, "room_ref": "schlafzimmer" } ] }
+                  "room_ref": "schlafzimmer" } ] }
 ```
 
 ## Consequences
 - Old integrations in the wild keep working; no forced-update treadmill.
 - The contract is the clean boundary that lets the two repos evolve independently (HACS
   ADR-0003).
-- Note: the `api_key` field in the canonical reading is a placeholder. Per ADR-0004 (Accepted),
-  donor auth is an RFC 9474 blind-signed credential `(msg, sig)`, not a plain API key — the
-  contract's auth field carries that credential. To be reflected when `packages/contract` is
-  written.
+- Note: the `api_key` field carries the ADR-0004 blind-signed credential, not a plain API key.
+  Its value is the string `"<X>:<signature_hex>"` — the pseudonym `X` and its unblinded RFC 9474
+  (RSASSA-PSS) signature. The server splits on `:`, verifies the signature over `utf8(X)`, and
+  uses `X` as the donor id. The contract field is still named `api_key`; rename/retype it to a
+  `credential` shape in a future additive contract revision.
