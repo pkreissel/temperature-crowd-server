@@ -1,0 +1,38 @@
+{
+  "name": "@temperaturcrowd/api",
+  "version": "1.0.0",
+  "description": "Ingest API for TemperaturCrowd",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx watch --env-file=.env src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "lint": "eslint src",
+    "generate-key": "tsx scripts/generate_key.ts",
+    "reset-db": "tsx --env-file=.env scripts/reset_db.ts"
+  },
+  "dependencies": {
+    "@cloudflare/voprf-ts": "^1.0.0",
+    "@fastify/cors": "^11.2.0",
+    "@fastify/rate-limit": "^11.1.0",
+    "@libsql/client": "^0.17.4",
+    "@libsql/kysely-libsql": "^0.4.1",
+    "@seven.io/client": "^5.6.0",
+    "@temperaturcrowd/contract": "workspace:*",
+    "dotenv": "^17.4.2",
+    "fastify": "^5.9.0",
+    "kysely": "^0.29.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^26.1.0",
+    "eslint": "^10.6.0",
+    "tsx": "^4.23.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.62.1",
+    "vite": "^6.4.3",
+    "vitest": "^4.1.9"
+  }
+}

@@ -1,0 +1,57 @@
+name: Deploy Server
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - '**'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Trigger Rolling Update on Bunny.net
+        # Only run this step if the build was successful
+        if: success()
+        uses: BunnyWay/actions/container-update-image@main
+        with:
+          # These secrets/vars need to be configured in your GitHub repository settings
+          app_id: ${{ vars.BUNNYNET_APP_ID || secrets.BUNNYNET_APP_ID }}
+          api_key: ${{ secrets.BUNNYNET_API_KEY }}
+          # The name of your container as configured in Bunny.net
+          container: ${{ vars.BUNNYNET_CONTAINER || 'temperaturcrowd-api' }}
+          # Since the meta action outputs multiple tags, we use the primary branch/sha tag
+          image_tag: "main"

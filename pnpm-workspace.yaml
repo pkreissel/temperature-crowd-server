@@ -1,0 +1,11 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+overrides:
+  vite: ^6.4.3
+  esbuild: ^0.25.0
+  underscore: ^1.13.8
+allowBuilds:
+  better-sqlite3: true
+  es5-ext: false
+  esbuild: true
