@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { verifyTurnstile } from './helpers/authHelpers';
+import { clientRateLimitKey } from './helpers/rateLimit';
 
 // The operator's identifying details (name + address) required by § 5 DDG. They are served ONLY
 // after a successful Cloudflare Turnstile pass, so automated scrapers/harvesters cannot collect
@@ -27,7 +28,9 @@ const legalRoutes: FastifyPluginAsync = async (server) => {
   });
 
   // Reveals the operator identity only after a valid Turnstile token. Never cache this.
-  server.post('/v1/impressum-details', async (request, reply) => {
+  server.post('/v1/impressum-details', {
+    config: { rateLimit: { max: 10, timeWindow: '1 minute', keyGenerator: clientRateLimitKey } }
+  }, async (request, reply) => {
     const token = (request.body as any)?.['cf-turnstile-response'];
     if (!token || !(await verifyTurnstile(token))) {
       reply.code(403).send({ error: 'CAPTCHA validation failed' });
