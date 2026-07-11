@@ -2,7 +2,8 @@ import { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
 import { blindRsaAuth } from '../blind_rsa';
 import * as crypto from 'crypto';
-import { normalizeAndValidatePhone, sendOtpSms, verifyTurnstile } from './helpers/authHelpers';
+import { sendOtpSms, verifyTurnstile, resolveEligiblePhone } from './helpers/authHelpers';
+import { clientRateLimitKey } from './helpers/rateLimit';
 
 const authRoutes: FastifyPluginAsync = async (server) => {
   // These responses reflect live session state (poll/verify), so they must never be cached.
@@ -16,7 +17,10 @@ const authRoutes: FastifyPluginAsync = async (server) => {
     reply.send(blindRsaAuth.getPublicKey());
   });
 
-  server.post('/v1/auth/init', async (request, reply) => {
+  server.post('/v1/auth/init', {
+    // Cap session creation to curb DB-flooding; each call inserts an auth_sessions row.
+    config: { rateLimit: { max: 15, timeWindow: '1 minute', keyGenerator: clientRateLimitKey } }
+  }, async (request, reply) => {
     const { blinded_element } = request.body as any;
     if (!blinded_element) {
       reply.code(400).send({ error: 'Missing blinded_element' });
@@ -67,40 +71,29 @@ async function getValidSessionOrReply(session_id: string, reply: any, logger: an
   return session;
 }
 
-  server.post('/v1/auth/request-otp', async (request, reply) => {
+  server.post('/v1/auth/request-otp', {
+    // Tight per-client limit: this route sends a paid SMS, so cap abuse/cost. Keyed on the Bunny
+    // edge IP hash (clientRateLimitKey), never Bunny's shared edge IP nor a raw client IP.
+    config: { rateLimit: { max: 5, timeWindow: '1 minute', keyGenerator: clientRateLimitKey } }
+  }, async (request, reply) => {
     const { session_id, phone_number, 'cf-turnstile-response': turnstileResponse } = request.body as any;
     if (!session_id || !phone_number || !turnstileResponse) {
       reply.code(400).send({ error: 'Missing parameters' });
       return;
     }
-    
+
     if (!(await verifyTurnstile(turnstileResponse))) {
       server.log.warn(`Turnstile validation failed`);
       reply.code(403).send({ error: 'CAPTCHA validation failed' });
       return;
     }
-    
+
     if (!(await getValidSessionOrReply(session_id, reply, server.log))) return;
-    
-    const normalizedPhone = normalizeAndValidatePhone(phone_number);
-    if (!normalizedPhone) {
-      reply.code(400).send({ error: 'Only German phone numbers (+49) are supported' });
-      return;
-    }
-    
-    const hmacSecret = process.env.PHONE_HMAC_SECRET;
-    if (!hmacSecret) {
-      reply.code(500).send({ error: 'Configuration error' });
-      return;
-    }
-    
-    const phoneHmac = crypto.createHmac('sha256', hmacSecret).update(normalizedPhone).digest('hex');
-    const existing = await db.selectFrom('registered_phones').where('phone_hmac', '=', phoneHmac).selectAll().executeTakeFirst();
-    if (existing) {
-      reply.code(400).send({ error: 'Phone number already registered' });
-      return;
-    }
-    
+
+    const resolved = await resolveEligiblePhone(phone_number, reply, server.log);
+    if (!resolved) return;
+    const { normalizedPhone, phoneHmac } = resolved;
+
     const otpCode = crypto.randomInt(100000, 1000000).toString();
     await db.updateTable('auth_sessions').set({
       phone_hmac: phoneHmac,
@@ -117,7 +110,10 @@ async function getValidSessionOrReply(session_id: string, reply: any, logger: an
     reply.send({ session_id, status: 'pending' });
   });
 
-  server.post('/v1/auth/verify-otp', async (request, reply) => {
+  server.post('/v1/auth/verify-otp', {
+    // Per-client limit backing the per-session 3-attempt cap against distributed OTP guessing.
+    config: { rateLimit: { max: 10, timeWindow: '1 minute', keyGenerator: clientRateLimitKey } }
+  }, async (request, reply) => {
     const { session_id, otp_code } = request.body as any;
     if (!session_id || !otp_code) {
       reply.code(400).send({ error: 'Missing session_id or otp_code' });
@@ -170,7 +166,10 @@ async function getValidSessionOrReply(session_id: string, reply: any, logger: an
     }
   });
 
-  server.get('/v1/auth/poll/:session_id', async (request, reply) => {
+  server.get('/v1/auth/poll/:session_id', {
+    // Higher limit — the client polls this repeatedly while the user completes the browser step.
+    config: { rateLimit: { max: 60, timeWindow: '1 minute', keyGenerator: clientRateLimitKey } }
+  }, async (request, reply) => {
     const { session_id } = request.params as any;
     const session = await db.selectFrom('auth_sessions').where('session_id', '=', session_id).select(['status', 'blind_signature']).executeTakeFirst();
     if (!session) return reply.code(404).send({ error: 'Not found' });

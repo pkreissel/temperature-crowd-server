@@ -1,8 +1,14 @@
 import { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
+import { clientRateLimitKey } from './helpers/rateLimit';
 
 const donorRoutes: FastifyPluginAsync = async (server) => {
-  server.delete('/v1/donor', async (request, reply) => {
+  server.delete('/v1/donor', {
+    // Rate-limit this authenticated, destructive route (clears the preHandler's
+    // "authorization without rate limiting" exposure; /v1/ingest is already limited).
+    // Keyed on the Bunny edge IP hash, not the shared edge IP.
+    config: { rateLimit: { max: 5, timeWindow: '1 minute', keyGenerator: clientRateLimitKey } }
+  }, async (request, reply) => {
     const donorId = request.donor?.id;
     if (!donorId) {
       reply.code(401).send({ error: 'Unauthorized' });

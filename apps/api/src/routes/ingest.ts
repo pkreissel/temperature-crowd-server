@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
 import contractSchema from '@temperaturcrowd/contract/schema.json';
+import { clientRateLimitKey } from './helpers/rateLimit';
 
 async function insertReadings(payload: any, donorId: string) {
   if (!payload.readings || payload.readings.length === 0) return;
@@ -60,9 +61,11 @@ const ingestRoutes: FastifyPluginAsync = async (server) => {
     schema: { body: contractSchema },
     config: {
       rateLimit: {
-        max: 30, // 30 requests per minute per donor
+        max: 30, // 30 requests per minute per client
         timeWindow: '1 minute',
-        keyGenerator: (request) => (request as any).donor?.id || request.ip
+        // donor id isn't set until the preHandler (after the rate-limit hook), so key on the
+        // Bunny edge IP hash instead of the shared edge IP.
+        keyGenerator: clientRateLimitKey
       }
     }
   }, async (request, reply) => {

@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -15,12 +18,14 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Match the production image (node:22-slim). Node >= 22.18 strips TS types, which the
+          # kysely FileMigrationProvider relies on to import the .ts migration files at test time.
+          node-version: 22
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
         with:
-          version: 9
+          version: 10
 
       - name: Get pnpm store directory
         shell: bash
@@ -39,10 +44,10 @@ jobs:
         run: pnpm install
 
       - name: Lint
-        run: pnpm run lint --if-present
+        run: pnpm run lint
 
       - name: Test
-        run: pnpm run test --if-present
+        run: pnpm run test
 
       - name: Build
-        run: pnpm run build --if-present
+        run: pnpm run build

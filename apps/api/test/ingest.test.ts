@@ -1,17 +1,20 @@
-import { describe, it, expect, beforeAll, afterAll, mock } from 'bun:test';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { server } from '../src/index';
 import { db, initDb } from '../src/db';
 import { blindRsaAuth } from '../src/blind_rsa';
 
-const mockDispatch = mock(async () => ({ success: '100' }));
-mock.module('@seven.io/client', () => {
-  return {
-    Client: class {},
-    SmsResource: class {
-      dispatch = mockDispatch;
-    }
-  };
-});
+// vi.mock is hoisted above imports, so the shared spy must be created via vi.hoisted.
+const { mockDispatch } = vi.hoisted(() => ({ mockDispatch: vi.fn(async () => ({ success: '100' })) }));
+vi.mock('@seven.io/client', () => ({
+  Client: class {},
+  SmsResource: class {
+    dispatch = mockDispatch;
+  },
+  // HLR lookup used by request-otp; return a deliverable German mobile so the flow proceeds.
+  LookupResource: class {
+    hlr = async () => [{ status: true, valid_number: 'valid', reachable: 'reachable', country_code: 'DE' }];
+  }
+}));
 
 describe('Ingest API', () => {
   let app: any;

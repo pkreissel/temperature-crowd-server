@@ -1,4 +1,93 @@
-# TemperaturCrowd API Server
+# TemperaturCrowd API-Server
+
+Dies ist der Backend-Server für das TemperaturCrowd-Projekt.
+
+## Funktion
+Er übernimmt:
+- **Authentifizierung**: Nutzt Blind RSA für eine datenschutzfreundliche Authentifizierung.
+- **Datenannahme**: Empfängt und verarbeitet Daten der Home-Assistant-Integrationen sicher.
+- **Kohortenmetriken**: Berechnet dynamische Kohortenmetriken zum Vergleich, ohne einzelne Nutzer zu verfolgen.
+
+Der Server-Code befindet sich in `apps/api/`.
+
+## Einrichtung
+
+### 1. Voraussetzungen
+- Node.js 20+
+- pnpm (`npm install -g pnpm`)
+- Eine libSQL-/Turso-Datenbank
+
+### 2. Umgebungsvariablen
+Erstelle im Verzeichnis **`apps/api/`** eine `.env`-Datei auf Basis der folgenden Vorlage:
+
+```env
+# Database (libSQL / Turso)
+DATABASE_URL="libsql://<your-turso-url>"
+DATABASE_AUTH_TOKEN="<your-turso-token>"
+
+# Seven API (for OTP SMS)
+SEVEN_API_KEY="<your-seven-api-key>"
+
+# Cloudflare Turnstile (Captcha)
+TURNSTILE_SECRET_KEY="<your-turnstile-secret-key>"
+
+# Security & Privacy Secrets
+PHONE_HMAC_SECRET="<generate-a-random-secret-string>"
+RSA_PRIVATE_KEY_B64="<generate-using-instructions-below>"
+```
+
+### 3. Erzeugen des privaten RSA-Schlüssels
+Aus Datenschutzgründen wird der private RSA-Schlüssel verwendet, um die Authentifizierungs-Token blind zu signieren. Er muss als einzeilige Base64-Zeichenkette über die Umgebungsvariable bereitgestellt werden.
+
+Um einen neuen sicheren 2048-Bit-Schlüssel zu erzeugen, führe im Stammverzeichnis aus:
+```bash
+pnpm --filter @temperaturcrowd/api run generate-key
+```
+Dies gibt eine Base64-Zeichenkette aus. Kopiere sie exakt so, wie sie ausgegeben wird, in deine `apps/api/.env` oder in die Umgebungsvariablen von Bunny CDN als `RSA_PRIVATE_KEY_B64`.
+
+### 4. Datenbank-Initialisierung
+Sobald deine `.env` konfiguriert ist, kannst du das Datenbankschema initialisieren. Wenn du die entfernte Datenbank leeren und neu beginnen möchtest, führe aus:
+```bash
+pnpm --filter @temperaturcrowd/api run reset-db
+```
+*Warnung: Dies löscht alle Tabellen und leert die Datenbank vollständig.*
+
+Das Schema wird beim ersten Serverstart automatisch angelegt.
+
+### 5. Server starten
+
+**Lokale Entwicklung (aus dem Stammverzeichnis):**
+```bash
+pnpm run dev
+```
+
+**Produktions-Build (aus dem Stammverzeichnis):**
+```bash
+pnpm run build
+pnpm run start
+```
+
+## Deployment auf Bunny CDN (Edge Containers)
+
+Bunny CDN erfordert einzeilige Umgebungsvariablen, weshalb `RSA_PRIVATE_KEY_B64` in Base64 kodiert ist.
+Definiere einfach alle Umgebungsvariablen aus deiner `.env` im Bunny-CDN-Dashboard für deine Container-Edge-App. Das Dockerfile baut das Projekt automatisch und führt `pnpm run start` aus.
+
+## Datenschutzerklärung
+
+Wir erfassen Temperaturdaten von den von dir ausgewählten Sensoren, um Trends zur Überhitzung von Innenräumen zu analysieren.
+
+### Was wir erfassen:
+- Deine Telefonnummer (wird **nur einmalig** verwendet, um das Herkunftsland zu bestimmen und die Datenqualität sicherzustellen, und anschließend sofort gelöscht). Blinde Signaturen stellen sicher, dass deine Telefonnummer und die von dir übermittelten Daten niemals miteinander verknüpft werden.
+- Stündlich aggregierte Temperaturdaten (Mittelwert, Minimum, Maximum) und deine Postleitzahl.
+- Eine pseudonymisierte Gerätekennung (Donor ID), um deine Messwerte über die Zeit zu verknüpfen, ohne zu wissen, wer du bist.
+- Raumnamen werden lokal auf deinem Gerät gehasht, bevor sie übertragen werden. Wir können die ursprünglichen Namen deiner Räume nicht lesen.
+
+### Deine Rechte:
+Du kannst die Datenerfassung jederzeit stoppen, indem du die Integration deinstallierst. Über unsere API kannst du mit deinem eindeutigen Integrations-Token die Löschung aller von dir historisch übermittelten Daten beantragen.
+
+---
+
+# TemperaturCrowd API Server (English)
 
 This is the backend server for the TemperaturCrowd project. 
 
