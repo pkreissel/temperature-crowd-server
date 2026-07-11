@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Impressum — TemperaturCrowd</title>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTurnstileLoad&render=explicit" async defer></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f3f4f6; color: #374151; margin: 0; padding: 2rem 1rem; line-height: 1.6; }
+    .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); max-width: 700px; margin: 0 auto; }
+    h1 { color: #111827; font-size: 1.5rem; margin-bottom: 1rem; }
+    h2 { color: #111827; font-size: 1.125rem; margin-top: 1.75rem; margin-bottom: 0.5rem; }
+    p { font-size: 0.9375rem; margin: 0.25rem 0; }
+    a { color: #2563eb; }
+    hr { border: none; border-top: 1px solid #e5e7eb; margin: 2.5rem 0; }
+    .lang { color: #6b7280; font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .reveal-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem; margin: 1rem 0 1.5rem; }
+    .reveal-box p { margin: 0 0 0.75rem; color: #6b7280; }
+    .masked { color: #9ca3af; letter-spacing: 0.15em; user-select: none; }
+    .reveal-error { color: #ef4444; display: none; }
+    footer { max-width: 700px; margin: 1.5rem auto 0; text-align: center; font-size: 0.8125rem; }
+    footer a { color: #6b7280; margin: 0 0.5rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="reveal-box" id="reveal-box">
+      <p>Zum Schutz vor automatisiertem Auslesen werden Name und Anschrift erst nach einer kurzen Sicherheitsabfrage angezeigt. — For protection against automated harvesting, the name and address are shown only after a short security check.</p>
+      <div id="imp-turnstile"></div>
+      <p class="reveal-error" id="reveal-error">Anzeige fehlgeschlagen. Bitte lade die Seite neu. — Could not load details, please reload.</p>
+    </div>
+
+    <p class="lang">Deutsch</p>
+    <h1>Impressum</h1>
+
+    <h2>Angaben gemäß § 5 DDG</h2>
+    <p class="imp-name masked">•••••••••••••</p>
+    <div class="imp-address masked">••••••••••••• · •••••••••••••</div>
+
+    <h2>Kontakt</h2>
+    <p>E-Mail: <span class="imp-email masked">•••••••••••••</span></p>
+    <p>Telefon: <span class="imp-phone masked">•••••••••••••</span></p>
+
+    <h2>Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV</h2>
+    <p class="imp-name masked">•••••••••••••</p>
+    <div class="imp-address masked">••••••••••••• · •••••••••••••</div>
+
+    <h2>Umsatzsteuer-Identifikationsnummer</h2>
+    <p>[USt-IdNr. gemäß § 27a UStG, sofern vorhanden — andernfalls diesen Abschnitt entfernen]</p>
+
+    <h2>Haftung für Inhalte</h2>
+    <p>Als Diensteanbieter sind wir gemäß § 7 Abs. 1 DDG für eigene Inhalte auf diesen Seiten nach den allgemeinen Gesetzen verantwortlich. Nach §§ 8 bis 10 DDG sind wir als Diensteanbieter jedoch nicht verpflichtet, übermittelte oder gespeicherte fremde Informationen zu überwachen oder nach Umständen zu forschen, die auf eine rechtswidrige Tätigkeit hinweisen.</p>
+
+    <h2>Streitschlichtung</h2>
+    <p>Wir sind nicht bereit oder verpflichtet, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.</p>
+
+    <hr>
+
+    <p class="lang">English</p>
+    <h1>Legal Notice (Impressum)</h1>
+
+    <h2>Information pursuant to § 5 DDG</h2>
+    <p class="imp-name masked">•••••••••••••</p>
+    <div class="imp-address masked">••••••••••••• · •••••••••••••</div>
+
+    <h2>Contact</h2>
+    <p>Email: <span class="imp-email masked">•••••••••••••</span></p>
+    <p>Phone: <span class="imp-phone masked">•••••••••••••</span></p>
+
+    <h2>Responsible for content pursuant to § 18 (2) MStV</h2>
+    <p class="imp-name masked">•••••••••••••</p>
+    <div class="imp-address masked">••••••••••••• · •••••••••••••</div>
+
+    <h2>VAT identification number</h2>
+    <p>[VAT ID pursuant to § 27a of the German VAT Act, if applicable — otherwise remove this section]</p>
+
+    <h2>Liability for content</h2>
+    <p>As a service provider, we are responsible for our own content on these pages in accordance with general laws pursuant to § 7 (1) DDG. However, pursuant to §§ 8 to 10 DDG, we as a service provider are not obligated to monitor transmitted or stored third-party information or to investigate circumstances that indicate illegal activity.</p>
+
+    <h2>Dispute resolution</h2>
+    <p>We are not willing or obliged to participate in dispute resolution proceedings before a consumer arbitration board.</p>
+  </div>
+
+  <footer>
+    <a href="/">Start</a> · <a href="/datenschutz">Datenschutz</a> · <a href="/impressum">Impressum</a>
+  </footer>
+
+  <script>
+    // Name and address are not in this page's source. They are fetched from /v1/impressum-details
+    // only after a valid Turnstile token, so scrapers/harvesters never see them.
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    function reveal(details) {
+      document.querySelectorAll('.imp-name').forEach((el) => { el.textContent = details.name; el.classList.remove('masked'); });
+      document.querySelectorAll('.imp-address').forEach((el) => { el.innerHTML = (details.address || []).map(esc).join('<br>'); el.classList.remove('masked'); });
+      document.querySelectorAll('.imp-email').forEach((el) => { el.textContent = details.email || '[E-Mail-Adresse eintragen]'; el.classList.remove('masked'); });
+      document.querySelectorAll('.imp-phone').forEach((el) => { el.textContent = details.phone || '—'; el.classList.remove('masked'); });
+      document.getElementById('reveal-box').style.display = 'none';
+    }
+
+    function onTurnstileLoad() {
+      fetch('/v1/config')
+        .then((r) => r.json())
+        .then(({ turnstileSiteKey }) => {
+          window.turnstile.render('#imp-turnstile', {
+            sitekey: turnstileSiteKey,
+            theme: 'light',
+            callback: async (token) => {
+              try {
+                const res = await fetch('/v1/impressum-details', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ 'cf-turnstile-response': token }),
+                });
+                if (!res.ok) throw new Error('rejected');
+                reveal(await res.json());
+              } catch (e) {
+                document.getElementById('reveal-error').style.display = 'block';
+              }
+            },
+          });
+        });
+    }
+  </script>
+</body>
+</html>

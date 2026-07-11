@@ -12,6 +12,7 @@ import dashboardRoutes from './routes/dashboard';
 import authRoutes from './routes/auth';
 import ingestRoutes from './routes/ingest';
 import donorRoutes from './routes/donor';
+import legalRoutes from './routes/legal';
 
 export const server = fastify({ 
   logger: {
@@ -77,6 +78,7 @@ server.register(dashboardRoutes);
 server.register(authRoutes);
 server.register(ingestRoutes);
 server.register(donorRoutes);
+server.register(legalRoutes);
 
 export const start = async () => {
   try {
