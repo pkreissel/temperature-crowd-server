@@ -5,10 +5,10 @@
   "private": true,
   "scripts": {
     "dev": "pnpm -r dev",
-    "build": "pnpm -r build",
+    "build": "pnpm -r --if-present run build",
     "start": "pnpm -r start",
-    "lint": "pnpm -r lint",
-    "test": "pnpm -r test"
+    "lint": "pnpm -r --if-present run lint",
+    "test": "pnpm -r --if-present run test"
   },
   "dependencies": {
     "@seven.io/client": "^5.6.0",

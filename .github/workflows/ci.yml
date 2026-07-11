@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -20,7 +23,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
         with:
-          version: 9
+          version: 10
 
       - name: Get pnpm store directory
         shell: bash
@@ -39,10 +42,10 @@ jobs:
         run: pnpm install
 
       - name: Lint
-        run: pnpm run lint --if-present
+        run: pnpm run lint
 
       - name: Test
-        run: pnpm run test --if-present
+        run: pnpm run test
 
       - name: Build
-        run: pnpm run build --if-present
+        run: pnpm run build

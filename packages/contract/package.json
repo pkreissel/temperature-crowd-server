@@ -2,8 +2,5 @@
   "name": "@temperaturcrowd/contract",
   "version": "1.0.0",
   "description": "Canonical ingest contract for TemperaturCrowd",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  }
+  "main": "index.js"
 }
