@@ -2,7 +2,7 @@ import { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
 import { blindRsaAuth } from '../blind_rsa';
 import * as crypto from 'crypto';
-import { normalizeAndValidatePhone, sendOtpSms, verifyTurnstile } from './helpers/authHelpers';
+import { normalizeAndValidatePhone, sendOtpSms, verifyTurnstile, isDeliverableGermanMobile } from './helpers/authHelpers';
 
 const authRoutes: FastifyPluginAsync = async (server) => {
   // These responses reflect live session state (poll/verify), so they must never be cached.
@@ -100,7 +100,13 @@ async function getValidSessionOrReply(session_id: string, reply: any, logger: an
       reply.code(400).send({ error: 'Phone number already registered' });
       return;
     }
-    
+
+    // HLR lookup: reject invalid/unreachable/non-German numbers before paying for an SMS.
+    if (!(await isDeliverableGermanMobile(normalizedPhone, server.log))) {
+      reply.code(400).send({ error: 'This phone number could not be verified as a reachable German mobile number.' });
+      return;
+    }
+
     const otpCode = crypto.randomInt(100000, 1000000).toString();
     await db.updateTable('auth_sessions').set({
       phone_hmac: phoneHmac,
