@@ -1,0 +1,20 @@
+{
+  "name": "temperaturcrowd-server",
+  "version": "1.0.0",
+  "description": "TemperaturCrowd Monorepo",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm -r dev",
+    "build": "pnpm -r build",
+    "start": "pnpm -r start",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test"
+  },
+  "dependencies": {
+    "@seven.io/client": "^5.6.0",
+    "api": "^6.1.3"
+  },
+  "devDependencies": {
+    "es5-ext": "^0.10.64"
+  }
+}

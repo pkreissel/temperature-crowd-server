@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build/
+*.log
+*.db
+.env
+*.pem
+bun.lockb
+package-lock.json
+*/.DS_Store
+.DS_Store

@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TemperaturCrowd Data</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg-color: #f8f9fa;
+      --text-color: #212529;
+      --border-color: #dee2e6;
+      --primary-color: #0d6efd;
+      --card-bg: #ffffff;
+      --muted-text: #6c757d;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      line-height: 1.5;
+      padding: 2rem;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    header {
+      border-bottom: 2px solid var(--border-color);
+      padding-bottom: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .subtitle {
+      color: var(--muted-text);
+      font-size: 1rem;
+    }
+
+    .section-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 0.5rem;
+      margin-top: 2rem;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .kpi-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      padding: 1.5rem;
+      border-radius: 4px;
+    }
+
+    .kpi-val {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--primary-color);
+    }
+
+    .kpi-label {
+      color: var(--muted-text);
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 400px;
+      width: 100%;
+    }
+
+    .instruction-list {
+      list-style-position: inside;
+      color: var(--text-color);
+    }
+
+    .instruction-list li {
+      margin-bottom: 0.75rem;
+    }
+
+    code {
+      background-color: #e9ecef;
+      padding: 0.2rem 0.4rem;
+      border-radius: 3px;
+      font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.875em;
+      color: #d63384;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+
+    th, td {
+      border: 1px solid var(--border-color);
+      padding: 0.75rem;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f1f3f5;
+      font-weight: 600;
+      color: var(--muted-text);
+      font-size: 0.875rem;
+      text-transform: uppercase;
+    }
+
+    .loading {
+      color: var(--muted-text);
+      font-style: italic;
+    }
+
+    a { color: var(--primary-color); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>TemperaturCrowd Data Portal</h1>
+      <p class="subtitle">Public Overheating Metrics and Integration Details</p>
+    </header>
+
+    <div id="loading" class="loading">Loading data from API...</div>
+    
+    <div id="dashboard-content" style="display:none;">
+      
+      <h2 class="section-title">Aggregate Metrics</h2>
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Active Donors</div>
+          <div class="kpi-val" id="kpi-donors">-</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Cohorts Tracked</div>
+          <div class="kpi-val" id="kpi-cohorts">-</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Avg. Max Temp</div>
+          <div class="kpi-val" id="kpi-temp">-</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Datapoints Collected</div>
+          <div class="kpi-val" id="kpi-readings">-</div>
+        </div>
+      </div>
+
+      <h2 class="section-title">Summer Overheating (Hours > 26°C)</h2>
+      <div class="card">
+        <div id="no-data-msg" style="display: none; color: var(--muted-text); padding: 2rem; text-align: center;">
+          Insufficient data to generate public cohorts. At least 10 donors per cell are required for k-anonymity.
+        </div>
+        <div class="chart-container" id="chart-wrapper">
+          <canvas id="overheatingChart"></canvas>
+        </div>
+      </div>
+
+      <h2 class="section-title">Cohort Data Table</h2>
+      <div class="card" style="overflow-x: auto;" id="table-wrapper">
+        <table id="dataTable">
+          <thead>
+            <tr>
+              <th>Cohort ID</th>
+              <th>Sample Size (k)</th>
+              <th>Avg UTGS (kh)</th>
+              <th>Avg Hours > 26°C</th>
+              <th>Avg Max Temp (°C)</th>
+              <th>Last Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Populated via JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <h2 class="section-title">Home Assistant Integration</h2>
+    <div class="card">
+      <ol class="instruction-list">
+        <li>Open <strong>HACS</strong> (Home Assistant Community Store) in your Home Assistant instance.</li>
+        <li>Click the three dots (top right), select <strong>Custom repositories</strong>.</li>
+        <li>Add <code>https://github.com/pkreissel/temperature-crowd-hacs</code> with the category <strong>Integration</strong>.</li>
+        <li>Search for <strong>TemperaturCrowd</strong> in HACS and click <strong>Download</strong>.</li>
+        <li>Restart Home Assistant.</li>
+        <li>Navigate to <strong>Settings &gt; Devices &amp; Services &gt; Add Integration</strong>, search for <strong>TemperaturCrowd</strong>, and follow the setup.</li>
+      </ol>
+    </div>
+
+  </div>
+
+  <script>
+    async function loadDashboard() {
+      try {
+        const response = await fetch('/v1/dashboard/public');
+        if (!response.ok) throw new Error('Network error');
+        const data = await response.json();
+        
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('dashboard-content').style.display = 'block';
+
+        // Update KPIs
+        document.getElementById('kpi-donors').textContent = data.stats.total_donors.toLocaleString();
+        document.getElementById('kpi-cohorts').textContent = data.cohorts.length.toLocaleString();
+        document.getElementById('kpi-readings').textContent = data.stats.total_readings.toLocaleString();
+        
+        let avgMaxTemp = data.cohorts.reduce((acc, c) => acc + c.avg_max_temp, 0) / (data.cohorts.length || 1);
+        document.getElementById('kpi-temp').textContent = avgMaxTemp ? avgMaxTemp.toFixed(1) + ' °C' : '-';
+
+        // Populate Table
+        const tbody = document.querySelector('#dataTable tbody');
+        data.cohorts.forEach(c => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><code>${c.cohort_id}</code></td>
+            <td>${c.k_size}</td>
+            <td>${c.avg_utgs_kh.toFixed(2)}</td>
+            <td>${c.avg_hours_above_26.toFixed(1)}</td>
+            <td>${c.avg_max_temp.toFixed(1)}</td>
+            <td style="color: #6c757d; font-size: 0.85rem;">${new Date(c.last_updated).toLocaleString()}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        // Handle empty state due to k-anonymity threshold
+        if (data.cohorts.length === 0) {
+          document.getElementById('no-data-msg').style.display = 'block';
+          document.getElementById('chart-wrapper').style.display = 'none';
+          document.getElementById('table-wrapper').innerHTML = '<div style="color: var(--muted-text); padding: 2rem; text-align: center;">Insufficient data for public table display.</div>';
+          return;
+        }
+
+        // Initialize Chart
+        const ctx = document.getElementById('overheatingChart').getContext('2d');
+        Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+        Chart.defaults.color = '#495057';
+
+        new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: data.cohorts.map(c => c.cohort_id),
+            datasets: [{
+              label: 'Avg Hours > 26°C',
+              data: data.cohorts.map(c => c.avg_hours_above_26),
+              backgroundColor: '#0d6efd',
+              maxBarThickness: 50
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false }
+            },
+            scales: {
+              y: { 
+                beginAtZero: true,
+                grid: { color: '#e9ecef' }
+              },
+              x: { 
+                grid: { display: false }
+              }
+            }
+          }
+        });
+
+      } catch (error) {
+        document.getElementById('loading').textContent = 'Failed to load data. The API might be unreachable.';
+        document.getElementById('loading').style.color = '#dc3545';
+      }
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>
