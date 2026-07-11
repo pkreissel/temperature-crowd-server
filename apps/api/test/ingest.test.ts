@@ -16,12 +16,33 @@ vi.mock('@seven.io/client', () => ({
   }
 }));
 
+// Safety guard: this suite wipes auth_sessions/readings/registered_phones in beforeAll. Refuse to
+// run unless DATABASE_URL is a local/test database, so a stray .env pointing at a real (e.g. Bunny)
+// database can never be truncated by the tests.
+function assertLocalTestDatabase(): void {
+  const url = process.env.DATABASE_URL;
+  const isLocal =
+    !url ||
+    url.startsWith('file:') ||
+    /:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(url);
+  if (!isLocal) {
+    throw new Error(
+      `Refusing to run destructive tests against a non-local database.\n` +
+        `DATABASE_URL=${url}\n` +
+        `These tests DELETE all rows from auth_sessions, readings and registered_phones.\n` +
+        `Unset DATABASE_URL (a local file DB is used) or point it at a local/test database.`
+    );
+  }
+}
+
 describe('Ingest API', () => {
   let app: any;
   let baseUrl: string;
   let originalSignBlinded: any;
 
   beforeAll(async () => {
+    assertLocalTestDatabase();
+
     process.env.PHONE_HMAC_SECRET = 'test-secret';
     process.env.SEVEN_API_KEY = '';
     originalSignBlinded = blindRsaAuth.signBlinded;
