@@ -1,4 +1,6 @@
 import { Client, SmsResource, LookupResource } from '@seven.io/client';
+import * as crypto from 'crypto';
+import { db } from '../../db/index';
 
 // Verify a Cloudflare Turnstile token against the siteverify endpoint.
 export async function verifyTurnstile(response: string): Promise<boolean> {
@@ -55,6 +57,37 @@ export async function isDeliverableGermanMobile(normalizedPhone: string, serverL
     serverLogger.error(err, 'HLR lookup failed; allowing number (fail-open).');
     return true;
   }
+}
+
+// Resolve the caller's phone to an eligible HMAC: valid German mobile, not already registered, and
+// deliverable (HLR). Sends the appropriate error reply and returns null on any failure.
+export async function resolveEligiblePhone(
+  phone_number: string,
+  reply: any,
+  logger: any
+): Promise<{ normalizedPhone: string; phoneHmac: string } | null> {
+  const normalizedPhone = normalizeAndValidatePhone(phone_number);
+  if (!normalizedPhone) {
+    reply.code(400).send({ error: 'Only German phone numbers (+49) are supported' });
+    return null;
+  }
+  const hmacSecret = process.env.PHONE_HMAC_SECRET;
+  if (!hmacSecret) {
+    reply.code(500).send({ error: 'Configuration error' });
+    return null;
+  }
+  const phoneHmac = crypto.createHmac('sha256', hmacSecret).update(normalizedPhone).digest('hex');
+  const existing = await db.selectFrom('registered_phones').where('phone_hmac', '=', phoneHmac).selectAll().executeTakeFirst();
+  if (existing) {
+    reply.code(400).send({ error: 'Phone number already registered' });
+    return null;
+  }
+  // HLR lookup: reject invalid/unreachable/non-German numbers before paying for an SMS.
+  if (!(await isDeliverableGermanMobile(normalizedPhone, logger))) {
+    reply.code(400).send({ error: 'This phone number could not be verified as a reachable German mobile number.' });
+    return null;
+  }
+  return { normalizedPhone, phoneHmac };
 }
 
 // Send the OTP via seven.io. With no API key configured, log it and treat as sent (dev mode).

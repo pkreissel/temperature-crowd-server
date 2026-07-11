@@ -7,6 +7,7 @@ import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import path from 'path';
+import { clientRateLimitKey } from './routes/helpers/rateLimit';
 
 import dashboardRoutes from './routes/dashboard';
 import authRoutes from './routes/auth';
@@ -35,7 +36,10 @@ server.register(cors, {
 
 server.register(rateLimit, {
   max: 100, // default limit
-  timeWindow: '1 minute'
+  timeWindow: '1 minute',
+  // Key on the Bunny edge IP hash (falls back to request.ip locally) so no route ever buckets
+  // traffic under Bunny's shared edge IP. See routes/helpers/rateLimit.ts.
+  keyGenerator: clientRateLimitKey
 });
 
 // Serve static HTML assets from ./public via `reply.sendFile` (no auto-routing).
