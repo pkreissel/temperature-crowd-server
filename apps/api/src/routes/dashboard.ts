@@ -14,14 +14,17 @@ const dashboardRoutes: FastifyPluginAsync = async (server) => {
         .selectAll()
         .execute();
 
-      const stats = await db.selectFrom('registered_phones')
-        .select(db.fn.count<number>('phone_hmac').as('total_donors'))
+      // "Active Donors" = people who actually contributed data, i.e. distinct donor_id in
+      // readings. NOT registered_phones: that's a per-phone anti-Sybil registry, and by the
+      // blind-signature design (RFC 9474) donor_id is cryptographically decoupled from
+      // phone_hmac, so a phone count neither equals nor maps to the donor count.
+      const stats = await db.selectFrom('readings')
+        .select((eb) => [
+          eb.fn.count<number>('donor_id').distinct().as('total_donors'),
+          eb.fn.count<number>('id').as('total_readings'),
+        ])
         .executeTakeFirst();
-        
-      const readingsStats = await db.selectFrom('readings')
-        .select(db.fn.count<number>('id').as('total_readings'))
-        .executeTakeFirst();
-        
+
       // KPIs only change when the hourly recompute job runs, so a short CDN
       // TTL is safe and offloads most reads from the origin. Set only on
       // success so error responses are never cached.
@@ -29,7 +32,7 @@ const dashboardRoutes: FastifyPluginAsync = async (server) => {
         cohorts,
         stats: {
           total_donors: stats?.total_donors || 0,
-          total_readings: readingsStats?.total_readings || 0
+          total_readings: stats?.total_readings || 0
         }
       });
     } catch (e) {
