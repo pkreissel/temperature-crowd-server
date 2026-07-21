@@ -79,14 +79,35 @@ function toTier1Row(
 }
 
 // One room → its per-season Tier-1 rows, each carrying the spatial keys Tier-2 needs.
-function processRoom(roomReadings: Reading[], now: number): EnrichedTier1[] {
+function processRoom(roomReadings: Reading[], now: number, globalYears: number[]): EnrichedTier1[] {
   const postalCode = latestPostalCode(roomReadings);
   const region = regionForPostalCode(postalCode);
   const cells = cellsForPostalCode(postalCode);
   const out: EnrichedTier1[] = [];
-  for (const year of seasonYearsIn(roomReadings)) {
-    const metrics = computeRoomSeason(roomReadings, region, seasonWindow(year), now);
-    if (metrics.observed_hours === 0) continue;
+  
+  const nowDate = new Date(now);
+
+  for (const year of globalYears) {
+    const window = seasonWindow(year);
+    const nowForYear = Date.UTC(
+      year,
+      nowDate.getUTCMonth(),
+      nowDate.getUTCDate(),
+      nowDate.getUTCHours(),
+      nowDate.getUTCMinutes(),
+      nowDate.getUTCSeconds(),
+      nowDate.getUTCMilliseconds()
+    );
+    const cappedWindow = {
+      start: window.start,
+      end: Math.min(window.end, nowForYear),
+    };
+
+    const metrics = computeRoomSeason(roomReadings, region, cappedWindow, nowForYear);
+    if (metrics.observed_hours === 0) {
+      // Room is missing data for this year, so it's not present in ALL years.
+      return [];
+    }
     const row = toTier1Row(roomReadings[0], seasonLabel(year), region, metrics);
     out.push({ metric: row, cells });
   }
@@ -114,11 +135,12 @@ export async function runRecomputeJob(): Promise<void> {
   }
 
   const now = Date.now();
+  const globalYears = seasonYearsIn(readings);
   const tier1: Tier1RoomMetric[] = [];
   const bySeason = new Map<string, EnrichedTier1[]>();
 
   for (const roomReadings of groupByRoom(readings).values()) {
-    for (const enriched of processRoom(roomReadings, now)) {
+    for (const enriched of processRoom(roomReadings, now, globalYears)) {
       tier1.push(enriched.metric);
       const season = enriched.metric.season;
       const bucket = bySeason.get(season) ?? [];
