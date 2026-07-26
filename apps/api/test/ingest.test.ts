@@ -160,6 +160,7 @@ describe('Ingest API', () => {
   });
 
   it('prevents double phone registration on concurrent polls', async () => {
+    // Session 1
     const initRes = await fetch(`${baseUrl}/v1/auth/init`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -173,20 +174,7 @@ describe('Ingest API', () => {
       body: JSON.stringify({ session_id, phone_number: '+4915112345680', 'cf-turnstile-response': 'valid-token' })
     });
     
-    const session = await db.selectFrom('auth_sessions').where('session_id', '=', session_id).selectAll().executeTakeFirst();
-    
-    await fetch(`${baseUrl}/v1/auth/verify-otp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id, otp_code: session!.otp_code })
-    });
-    
-    const poll1Res = await fetch(`${baseUrl}/v1/auth/poll/${session_id}`);
-    const poll2Res = await fetch(`${baseUrl}/v1/auth/poll/${session_id}`);
-    
-    expect(poll1Res.status).toBe(200);
-    expect(poll2Res.status).toBe(200);
-    
+    // Session 2 (concurrent, same phone)
     const initRes2 = await fetch(`${baseUrl}/v1/auth/init`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -200,17 +188,79 @@ describe('Ingest API', () => {
       body: JSON.stringify({ session_id: session_id2, phone_number: '+4915112345680', 'cf-turnstile-response': 'valid-token' })
     });
     
-    const session2 = await db.selectFrom('auth_sessions').where('session_id', '=', session_id2).selectAll().executeTakeFirst();
+    // Verify Session 1
+    const session = await db.selectFrom('auth_sessions').where('session_id', '=', session_id).selectAll().executeTakeFirst();
+    await fetch(`${baseUrl}/v1/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id, otp_code: session!.otp_code })
+    });
     
+    // Verify Session 2
+    const session2 = await db.selectFrom('auth_sessions').where('session_id', '=', session_id2).selectAll().executeTakeFirst();
     await fetch(`${baseUrl}/v1/auth/verify-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: session_id2, otp_code: session2!.otp_code })
     });
     
+    // Poll Session 1 (succeeds and consumes phone)
+    const poll1Res = await fetch(`${baseUrl}/v1/auth/poll/${session_id}`);
+    expect(poll1Res.status).toBe(200);
+    
+    // Poll Session 2 (fails gracefully with 400 because phone was just registered)
     const conflictPollRes = await fetch(`${baseUrl}/v1/auth/poll/${session_id2}`);
     expect(conflictPollRes.status).toBe(400);
   });
+
+  it('allows re-registration if previous session was abandoned before completion', async () => {
+    const phoneNumber = '+4915112345681';
+    
+    // 1. User starts onboarding and enters phone, but abandons it
+    const initRes = await fetch(`${baseUrl}/v1/auth/init`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ blinded_element: '01020306' })
+    });
+    const { session_id: abandoned_session_id } = await initRes.json() as any;
+
+    const requestRes1 = await fetch(`${baseUrl}/v1/auth/request-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-client-ip-hash': 'test-abandon-ip' },
+      body: JSON.stringify({ session_id: abandoned_session_id, phone_number: phoneNumber, 'cf-turnstile-response': 'valid-token' })
+    });
+    expect(requestRes1.status).toBe(200);
+    // User abandons here...
+    
+    // 2. User comes back later, starts new session
+    const initRes2 = await fetch(`${baseUrl}/v1/auth/init`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ blinded_element: '01020307' })
+    });
+    const { session_id: new_session_id } = await initRes2.json() as any;
+
+    // 3. User requests OTP for the same phone number
+    const requestRes2 = await fetch(`${baseUrl}/v1/auth/request-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-client-ip-hash': 'test-abandon-ip' },
+      body: JSON.stringify({ session_id: new_session_id, phone_number: phoneNumber, 'cf-turnstile-response': 'valid-token' })
+    });
+    // This MUST succeed (status 200), because the phone was not registered by the abandoned session
+    expect(requestRes2.status).toBe(200);
+    
+    // 4. User completes the new session
+    const session = await db.selectFrom('auth_sessions').where('session_id', '=', new_session_id).selectAll().executeTakeFirst();
+    await fetch(`${baseUrl}/v1/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: new_session_id, otp_code: session!.otp_code })
+    });
+    
+    const pollRes = await fetch(`${baseUrl}/v1/auth/poll/${new_session_id}`);
+    expect(pollRes.status).toBe(200);
+  });
+
 
   it('supports delete_before for removing old readings', async () => {
     const deviceId = 'test-device-delete';
