@@ -20,12 +20,15 @@ describe('Ingest API', () => {
   let app: any;
   let baseUrl: string;
   let originalSignBlinded: any;
+  let originalVerifyToken: any;
 
   beforeAll(async () => {
     process.env.PHONE_HMAC_SECRET = 'test-secret';
     process.env.SEVEN_API_KEY = '';
     originalSignBlinded = blindRsaAuth.signBlinded;
     blindRsaAuth.signBlinded = async () => '01020304'; // Mocked hex string signature
+    originalVerifyToken = blindRsaAuth.verifyToken;
+    blindRsaAuth.verifyToken = async () => true;
 
     await initDb();
     
@@ -42,6 +45,7 @@ describe('Ingest API', () => {
 
   afterAll(async () => {
     blindRsaAuth.signBlinded = originalSignBlinded;
+    blindRsaAuth.verifyToken = originalVerifyToken;
     await app.close();
   });
 
@@ -153,5 +157,98 @@ describe('Ingest API', () => {
 
     // Reset API key so other tests are unaffected if they run after this
     process.env.SEVEN_API_KEY = '';
+  });
+
+  it('prevents double phone registration on concurrent polls', async () => {
+    const initRes = await fetch(`${baseUrl}/v1/auth/init`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ blinded_element: '01020304' })
+    });
+    const { session_id } = await initRes.json() as any;
+
+    await fetch(`${baseUrl}/v1/auth/request-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id, phone_number: '+4915112345680', 'cf-turnstile-response': 'valid-token' })
+    });
+    
+    const session = await db.selectFrom('auth_sessions').where('session_id', '=', session_id).selectAll().executeTakeFirst();
+    
+    await fetch(`${baseUrl}/v1/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id, otp_code: session!.otp_code })
+    });
+    
+    const poll1Res = await fetch(`${baseUrl}/v1/auth/poll/${session_id}`);
+    const poll2Res = await fetch(`${baseUrl}/v1/auth/poll/${session_id}`);
+    
+    expect(poll1Res.status).toBe(200);
+    expect(poll2Res.status).toBe(200);
+    
+    const initRes2 = await fetch(`${baseUrl}/v1/auth/init`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ blinded_element: '01020305' })
+    });
+    const session_id2 = (await initRes2.json() as any).session_id;
+
+    await fetch(`${baseUrl}/v1/auth/request-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: session_id2, phone_number: '+4915112345680', 'cf-turnstile-response': 'valid-token' })
+    });
+    
+    const session2 = await db.selectFrom('auth_sessions').where('session_id', '=', session_id2).selectAll().executeTakeFirst();
+    
+    await fetch(`${baseUrl}/v1/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: session_id2, otp_code: session2!.otp_code })
+    });
+    
+    const conflictPollRes = await fetch(`${baseUrl}/v1/auth/poll/${session_id2}`);
+    expect(conflictPollRes.status).toBe(400);
+  });
+
+  it('supports delete_before for removing old readings', async () => {
+    const deviceId = 'test-device-delete';
+    
+    // Insert initial readings
+    await fetch(`${baseUrl}/v1/ingest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        device_id: deviceId,
+        api_key: 'mock:token',
+        readings: [
+          { ts: '2025-01-01T10:00:00Z', temp_c: 20 },
+          { ts: '2025-01-02T10:00:00Z', temp_c: 22 },
+          { ts: '2025-01-03T10:00:00Z', temp_c: 21 }
+        ]
+      })
+    });
+    
+    const countBefore = await db.selectFrom('readings').where('device_id', '=', deviceId).select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst();
+    expect(Number(countBefore?.count)).toBe(3);
+
+    // Send another ingest with delete_before
+    await fetch(`${baseUrl}/v1/ingest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        device_id: deviceId,
+        api_key: 'mock:token',
+        delete_before: '2025-01-02T10:00:00Z',
+        readings: []
+      })
+    });
+    
+    const countAfter = await db.selectFrom('readings').where('device_id', '=', deviceId).select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst();
+    expect(Number(countAfter?.count)).toBe(2);
+    
+    const remaining = await db.selectFrom('readings').where('device_id', '=', deviceId).select('ts').orderBy('ts', 'asc').execute();
+    expect(remaining.map(r => r.ts)).toEqual(['2025-01-02T10:00:00Z', '2025-01-03T10:00:00Z']);
   });
 });
