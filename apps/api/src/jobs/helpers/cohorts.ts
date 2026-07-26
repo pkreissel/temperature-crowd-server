@@ -14,8 +14,11 @@ export interface EnrichedTier1 {
   cells: CellsByLevel;
 }
 
-function mean(nums: number[]): number {
-  return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
+function median(nums: number[]): number {
+  if (nums.length === 0) return 0;
+  const sorted = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
 function distinctDonors(entries: EnrichedTier1[]): number {
@@ -55,13 +58,13 @@ function aggregateCohort(
     region: dominantRegion(entries),
     k_size: kSize,
     room_count: m.length,
-    avg_utgs_kh: mean(m.map((x) => x.utgs_kh)),
-    avg_utgs_kh_peak: mean(m.map((x) => x.utgs_kh_peak ?? x.utgs_kh)),
-    avg_hours_above_26: mean(m.map((x) => x.hours_above_26)),
-    avg_hours_above_28: mean(m.map((x) => x.hours_above_28)),
-    avg_hours_above_30: mean(m.map((x) => x.hours_above_30)),
-    avg_max_temp: mean(m.map((x) => x.max_temp)),
-    avg_tropical_nights: mean(m.map((x) => x.tropical_nights)),
+    avg_utgs_kh: median(m.map((x) => x.utgs_kh)),
+    avg_utgs_kh_peak: median(m.map((x) => x.utgs_kh_peak ?? x.utgs_kh)),
+    avg_hours_above_26: median(m.map((x) => x.hours_above_26)),
+    avg_hours_above_28: median(m.map((x) => x.hours_above_28)),
+    avg_hours_above_30: median(m.map((x) => x.hours_above_30)),
+    avg_max_temp: median(m.map((x) => x.max_temp)),
+    avg_tropical_nights: median(m.map((x) => x.tropical_nights)),
   };
 }
 

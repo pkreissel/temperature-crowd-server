@@ -3,6 +3,15 @@ import { db } from '../db/index';
 import contractSchema from '@temperaturcrowd/contract/schema.json';
 import { clientRateLimitKey } from './helpers/rateLimit';
 
+async function deleteReadings(deviceId: string, donorId: string, deleteBefore: string) {
+  if (!deleteBefore) return;
+  await db.deleteFrom('readings')
+    .where('donor_id', '=', donorId)
+    .where('device_id', '=', deviceId)
+    .where('ts', '<', deleteBefore)
+    .execute();
+}
+
 async function insertReadings(payload: any, donorId: string) {
   if (!payload.readings || payload.readings.length === 0) return;
   const values = payload.readings.map((r: any) => ({
@@ -101,6 +110,10 @@ const ingestRoutes: FastifyPluginAsync = async (server) => {
   }, async (request, reply) => {
     const payload = request.body as any;
     const donorId = request.donor?.id || 'unknown';
+    
+    if (payload.delete_before) {
+      await deleteReadings(payload.device_id, donorId, payload.delete_before);
+    }
     
     await insertReadings(payload, donorId);
     await insertDonorMetadata(payload, donorId);

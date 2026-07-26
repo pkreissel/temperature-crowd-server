@@ -56,8 +56,12 @@
           }
         },
         "required": ["ts", "temp_c"]
-      },
-      "minItems": 1
+      }
+    },
+    "delete_before": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Optional timestamp to delete earlier readings for this device"
     }
   },
   "required": ["device_id", "api_key", "readings"]

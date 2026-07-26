@@ -59,6 +59,7 @@ export interface AuthSession {
   blind_signature: string | null; // server's RFC 9474 blind signature over blinded_element
   attempts: number;
   expires_at: string;
+  phone_consumed: number;
   created_at?: string;
 }
 
