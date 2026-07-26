@@ -37,6 +37,7 @@ const authRoutes: FastifyPluginAsync = async (server) => {
       blinded_element,
       status: 'pending',
       attempts: 0,
+      phone_consumed: 0,
       expires_at: expiresAt
     }).execute();
     
