@@ -149,14 +149,8 @@ async function getValidSessionOrReply(session_id: string, reply: any, logger: an
       const blindSignature = await blindRsaAuth.signBlinded(session.blinded_element);
       const phoneHmac = session.phone_hmac;
 
-      try {
-        await db.insertInto('registered_phones').values({ phone_hmac: phoneHmac }).execute();
-      } catch {
-        return reply.code(400).send({ error: 'Phone already registered' });
-      }
-
       await db.updateTable('auth_sessions')
-        .set({ status: 'verified', blind_signature: blindSignature, phone_hmac: '', otp_code: '' })
+        .set({ status: 'verified', blind_signature: blindSignature, otp_code: '' })
         .where('session_id', '=', session_id).execute();
 
       reply.send({ status: 'ok', blind_signature: blindSignature });
@@ -171,9 +165,24 @@ async function getValidSessionOrReply(session_id: string, reply: any, logger: an
     config: { rateLimit: { max: 60, timeWindow: '1 minute', keyGenerator: clientRateLimitKey } }
   }, async (request, reply) => {
     const { session_id } = request.params as any;
-    const session = await db.selectFrom('auth_sessions').where('session_id', '=', session_id).select(['status', 'blind_signature']).executeTakeFirst();
+    const session = await db.selectFrom('auth_sessions').where('session_id', '=', session_id).select(['status', 'blind_signature', 'phone_consumed', 'phone_hmac']).executeTakeFirst();
     if (!session) return reply.code(404).send({ error: 'Not found' });
-    if (session.status === 'verified') return reply.send({ status: 'verified', blind_signature: session.blind_signature });
+    
+    if (session.status === 'verified') {
+      if (!session.phone_consumed) {
+        try {
+          await db.transaction().execute(async (trx) => {
+            await trx.insertInto('registered_phones').values({ phone_hmac: session.phone_hmac }).execute();
+            await trx.updateTable('auth_sessions').set({ phone_consumed: 1, phone_hmac: '' }).where('session_id', '=', session_id).execute();
+          });
+        } catch (err) {
+          server.log.warn({ session_id }, 'Phone already registered by another session during poll');
+          return reply.code(400).send({ error: 'Phone already registered by another session' });
+        }
+      }
+      return reply.send({ status: 'verified', blind_signature: session.blind_signature });
+    }
+    
     reply.send({ status: 'pending' });
   });
 };

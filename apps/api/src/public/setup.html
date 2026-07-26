@@ -60,6 +60,17 @@
       error1.textContent = 'Missing session id. Please restart setup from Home Assistant.';
       error1.classList.remove('hidden');
       sendBtn.disabled = true;
+    } else {
+      // Check if session is already verified (e.g. user clicked back after success)
+      fetch('/v1/auth/poll/' + sessionId)
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 'verified') {
+            step1.classList.add('hidden');
+            step3.classList.remove('hidden');
+          }
+        })
+        .catch(err => console.error('Failed to check session status:', err));
     }
 
     // Turnstile explicit render: the api.js loader calls this once ready. We fetch the public
