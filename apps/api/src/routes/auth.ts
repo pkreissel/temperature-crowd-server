@@ -147,7 +147,6 @@ async function getValidSessionOrReply(session_id: string, reply: any, logger: an
     
     try {
       const blindSignature = await blindRsaAuth.signBlinded(session.blinded_element);
-      const phoneHmac = session.phone_hmac;
 
       await db.updateTable('auth_sessions')
         .set({ status: 'verified', blind_signature: blindSignature, otp_code: '' })
@@ -175,7 +174,7 @@ async function getValidSessionOrReply(session_id: string, reply: any, logger: an
             await trx.insertInto('registered_phones').values({ phone_hmac: session.phone_hmac }).execute();
             await trx.updateTable('auth_sessions').set({ phone_consumed: 1, phone_hmac: '' }).where('session_id', '=', session_id).execute();
           });
-        } catch (err) {
+        } catch {
           server.log.warn({ session_id }, 'Phone already registered by another session during poll');
           return reply.code(400).send({ error: 'Phone already registered by another session' });
         }
