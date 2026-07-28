@@ -29,9 +29,11 @@ export async function processYear(
       SELECT ${cappedWindow.start} as start_ms, ${cappedWindow.end} as end_ms
     ),
     raw_in_window AS (
-      SELECT donor_id, device_id, postal_code, room_ref, ts, temp_c, temp_c_max, unixepoch(ts) * 1000 AS ts_ms
-      FROM readings
-      JOIN params ON unixepoch(ts) * 1000 >= params.start_ms AND unixepoch(ts) * 1000 < params.end_ms
+      SELECT r.donor_id, r.device_id, r.postal_code, r.room_ref, r.ts, r.temp_c, r.temp_c_max, unixepoch(r.ts) * 1000 AS ts_ms
+      FROM readings r
+      JOIN params ON unixepoch(r.ts) * 1000 >= params.start_ms AND unixepoch(r.ts) * 1000 < params.end_ms
+      LEFT JOIN donor_metadata dm ON r.donor_id = dm.donor_id
+      WHERE COALESCE(dm.has_ac, 0) = 0
     ),
     hourly AS (
       SELECT

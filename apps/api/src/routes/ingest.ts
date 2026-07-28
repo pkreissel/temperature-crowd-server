@@ -46,7 +46,8 @@ async function insertReadings(payload: any, donorId: string) {
 }
 
 async function insertDonorMetadata(payload: any, donorId: string) {
-  if (!payload.building_age && !payload.floor_level && !payload.orientation && !payload.insulation_status) return;
+  const metadataKeys = ['building_age', 'floor_level', 'orientation', 'insulation_status', 'has_ac'];
+  if (!metadataKeys.some(k => payload[k] !== undefined)) return;
   
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { sql } = require('kysely');
@@ -56,7 +57,8 @@ async function insertDonorMetadata(payload: any, donorId: string) {
       building_age: payload.building_age ?? null,
       floor_level: payload.floor_level ?? null,
       orientation: payload.orientation ?? null,
-      insulation_status: payload.insulation_status ?? null
+      insulation_status: payload.insulation_status ?? null,
+      has_ac: payload.has_ac !== undefined ? (payload.has_ac ? 1 : 0) : null
     })
     .onConflict((oc) => oc
       .column('donor_id')
@@ -65,6 +67,7 @@ async function insertDonorMetadata(payload: any, donorId: string) {
         floor_level: (eb) => eb.ref('excluded.floor_level'),
         orientation: (eb) => eb.ref('excluded.orientation'),
         insulation_status: (eb) => eb.ref('excluded.insulation_status'),
+        has_ac: (eb) => eb.ref('excluded.has_ac'),
         updated_at: sql`CURRENT_TIMESTAMP`
       })
     )

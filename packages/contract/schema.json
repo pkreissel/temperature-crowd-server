@@ -28,6 +28,10 @@
     "insulation_status": {
       "type": ["string", "null"]
     },
+    "has_ac": {
+      "type": "boolean",
+      "description": "Whether the user uses air conditioning"
+    },
     "readings": {
       "type": "array",
       "items": {
