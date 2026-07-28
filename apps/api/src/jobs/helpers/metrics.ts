@@ -72,6 +72,7 @@ export function latestPostalCode(readings: Reading[]): string | null {
 function bucketByHour(readings: Reading[], window: { start: number; end: number }): Map<number, HourBucket> {
   const hourly = new Map<number, HourBucket>();
   for (const r of readings) {
+    if (r.temp_c === 0) continue;
     const t = Date.parse(r.ts);
     if (Number.isNaN(t) || t < window.start || t >= window.end) continue;
     const hourEpoch = Math.floor(t / HOUR_MS);
