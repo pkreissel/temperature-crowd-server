@@ -43,6 +43,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Audit
+        run: npm audit
+
       - name: Lint
         run: pnpm run lint
 
