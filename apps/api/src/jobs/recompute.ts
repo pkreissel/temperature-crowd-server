@@ -20,9 +20,11 @@ export async function runRecomputeJob(): Promise<void> {
 
   // Find global years
   const yearsRes = await sql<{ year: number }>`
-    SELECT DISTINCT CAST(strftime('%Y', ts) AS INTEGER) AS year
+    SELECT CAST(strftime('%Y', ts) AS INTEGER) AS year
     FROM readings
     WHERE CAST(strftime('%m', ts) AS INTEGER) BETWEEN ${SEASON_START_MONTH} AND ${SEASON_END_MONTH}
+    GROUP BY CAST(strftime('%Y', ts) AS INTEGER)
+    HAVING COUNT(DISTINCT donor_id) >= ${K_THRESHOLD}
   `.execute(db);
   
   const globalYears = yearsRes.rows.map(r => r.year);
