@@ -16,15 +16,5 @@
   },
   "devDependencies": {
     "es5-ext": "^0.10.64"
-  },
-  "resolutions": {
-    "brace-expansion": "^5.0.8",
-    "fast-uri": "^3.1.4",
-    "find-my-way": "^9.7.0",
-    "@fastify/static": "^10.1.2",
-    "underscore": "^1.13.8",
-    "postcss": "8.5.18",
-    "esbuild": "^0.25.0",
-    "vite": "^6.4.3"
   }
 }
