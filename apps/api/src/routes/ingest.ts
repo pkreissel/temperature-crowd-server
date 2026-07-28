@@ -46,7 +46,8 @@ async function insertReadings(payload: any, donorId: string) {
 }
 
 async function insertDonorMetadata(payload: any, donorId: string) {
-  if (payload.building_age === undefined && payload.floor_level === undefined && payload.orientation === undefined && payload.insulation_status === undefined && payload.has_ac === undefined) return;
+  const metadataKeys = ['building_age', 'floor_level', 'orientation', 'insulation_status', 'has_ac'];
+  if (!metadataKeys.some(k => payload[k] !== undefined)) return;
   
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { sql } = require('kysely');
