@@ -69,6 +69,7 @@ export interface DonorMetadata {
   floor_level: string | null;
   orientation: string | null;
   insulation_status: string | null;
+  has_ac: number | null;
   updated_at?: string;
 }
 
