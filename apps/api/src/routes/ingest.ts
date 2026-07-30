@@ -25,7 +25,7 @@ async function insertReadings(payload: any, donorId: string) {
     postal_code: payload.postal_code ?? null
   }));
 
-  // The unique key is (device_id, ts) only, so a reading can collide with a row owned by a
+  // The unique key is (device_id, ts, room_ref), so a reading can collide with a row owned by a
   // *different* donor (device_id is a client-supplied UUID). Guard the upsert with a WHERE so
   // it only overwrites a row that already belongs to the same donor; a cross-donor collision
   // becomes a no-op instead of silently tampering with another donor's readings. donor_id is
@@ -33,7 +33,7 @@ async function insertReadings(payload: any, donorId: string) {
   await db.insertInto('readings')
     .values(values)
     .onConflict((oc) => oc
-      .columns(['device_id', 'ts'])
+      .columns(['device_id', 'ts', 'room_ref'])
       .doUpdateSet({
         temp_c: (eb) => eb.ref('excluded.temp_c'),
         temp_c_min: (eb) => eb.ref('excluded.temp_c_min'),
