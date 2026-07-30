@@ -1,5 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { buildCohortsForSeason, EnrichedTier1 } from '../src/jobs/helpers/cohorts';
+import { buildCohortsForSeason, EnrichedTier1, MIN_COVERAGE_PCT } from '../src/jobs/helpers/cohorts';
+
+const CELLS = { de: 'de:DE', plz1: 'plz1:6', plz3: 'plz3:603', plz5: 'plz5:60385' };
+
+function room(i: number, over: Partial<EnrichedTier1['metric']> = {}): EnrichedTier1 {
+  return {
+    metric: {
+      donor_id: `d${i}`, device_id: `dev${i}`, room_ref: `r${i}`, season: '2026-summer', region: 'A',
+      utgs_kh: 10, utgs_kh_peak: 10, hours_above_26: 5, hours_above_28: 2, hours_above_30: 0,
+      max_temp: 30, tropical_nights: 1, coverage_pct: 100, ...over,
+    },
+    cells: { ...CELLS },
+  };
+}
 
 describe('Cohorts Aggregation', () => {
   it('aggregates metrics using median instead of mean', () => {
@@ -127,5 +140,41 @@ describe('Cohorts Aggregation', () => {
     // Middle two are 10 and 10, so average is 10.
     expect(result!.avg_utgs_kh).toBe(10);
     expect(result!.avg_max_temp).toBe(30);
+  });
+
+  it('excludes rooms below the coverage floor from the published median', () => {
+    // 10 full-season rooms carrying real heat, plus 30 rooms that just joined and have a few
+    // hours each. Without the floor the zeros are the majority and the median collapses to 0.
+    const entries = [
+      ...Array.from({ length: 10 }, (_, i) => room(i + 1, { utgs_kh: 200, hours_above_26: 120 })),
+      ...Array.from({ length: 30 }, (_, i) =>
+        room(i + 100, { utgs_kh: 0, hours_above_26: 0, coverage_pct: 0.07 })),
+    ];
+
+    const result = buildCohortsForSeason('2026-summer', entries).find((c) => c.grid_level === 'plz5');
+
+    expect(result!.avg_utgs_kh).toBe(200);
+    expect(result!.avg_hours_above_26).toBe(120);
+    // k and room_count count only the rooms that were actually aggregated.
+    expect(result!.k_size).toBe(10);
+    expect(result!.room_count).toBe(10);
+  });
+
+  it('publishes nothing when the coverage-eligible rooms are below k', () => {
+    // 9 eligible donors is under k=10, and 50 thin rooms must not be able to top it up.
+    const entries = [
+      ...Array.from({ length: 9 }, (_, i) => room(i + 1)),
+      ...Array.from({ length: 50 }, (_, i) => room(i + 100, { coverage_pct: MIN_COVERAGE_PCT - 1 })),
+    ];
+
+    expect(buildCohortsForSeason('2026-summer', entries)).toEqual([]);
+  });
+
+  it('keeps a room sitting exactly on the coverage floor', () => {
+    const entries = Array.from({ length: 10 }, (_, i) => room(i + 1, { coverage_pct: MIN_COVERAGE_PCT }));
+
+    const result = buildCohortsForSeason('2026-summer', entries).find((c) => c.grid_level === 'plz5');
+
+    expect(result!.k_size).toBe(10);
   });
 });

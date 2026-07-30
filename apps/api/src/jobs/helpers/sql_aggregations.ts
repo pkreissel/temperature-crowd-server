@@ -33,7 +33,11 @@ export async function processYear(
       FROM readings r
       JOIN params ON unixepoch(r.ts) * 1000 >= params.start_ms AND unixepoch(r.ts) * 1000 < params.end_ms
       LEFT JOIN donor_metadata dm ON r.donor_id = dm.donor_id
+      -- 0 °C is HA's "missing data" sentinel; the outer bounds drop sensors reporting a
+      -- non-temperature entity (seen: 43530), which would otherwise dominate the aggregates.
       WHERE COALESCE(dm.has_ac, 0) = 0 AND r.temp_c != 0
+        AND r.temp_c BETWEEN -30 AND 60
+        AND (r.temp_c_max IS NULL OR r.temp_c_max BETWEEN -30 AND 60)
     ),
     hourly AS (
       SELECT

@@ -7,6 +7,13 @@ import { CellsByLevel, GRID_LEVELS, GridLevel } from './grid';
 // Public display floor: never publish a cell seen by fewer than K distinct donors.
 export const K_THRESHOLD = 10;
 
+// ÜTGS and the hours-above counters are *cumulative* over the season, so a room observed for
+// three days is not comparable to one observed for three months — it just contributes a zero.
+// Rooms below this share of the elapsed season are therefore excluded from Tier-2 aggregation
+// (Tier-1 keeps every room: that is the donor's own data, shown with its coverage %).
+// ADR-0002 forbids extrapolating short windows up, so exclusion is the honest alternative.
+export const MIN_COVERAGE_PCT = 50;
+
 // A Tier-1 row plus its spatial keys. Kept in memory only — the cell hierarchy must never be
 // persisted to the public tier, where it would be a re-identification vector.
 export interface EnrichedTier1 {
@@ -107,7 +114,9 @@ function partitionLevel(
 // The grid is strictly nested, so merge-up is exact and nothing sub-threshold is ever written.
 export function buildCohortsForSeason(season: string, entries: EnrichedTier1[]): Tier2PublicCohort[] {
   const cohorts: Tier2PublicCohort[] = [];
-  let pending = entries;
+  // Drop thin rooms before k is counted, so a cell can never clear k on rooms that contribute
+  // nothing but zeros.
+  let pending = entries.filter((e) => e.metric.coverage_pct >= MIN_COVERAGE_PCT);
   for (const level of GRID_LEVELS) {
     pending = partitionLevel(season, level, pending, cohorts);
     if (pending.length === 0) break;

@@ -41,7 +41,17 @@ raw readings ──► Tier 1: per-room metrics ──► Tier 2: public cohorts
    build time. Stricter floor chosen for safe open-data release.
 3. **Sub-threshold cells — merge upward the grid hierarchy** (1→10→100 km) until k≥10; never
    drop. Exact because the grid is nested.
-4. **Resident reference (at-rest floor) — Zensus 2022 grid → precomputed safe-cell bitmask.**
+4. **Coverage floor — a room joins a Tier-2 cohort only at ≥ 50 % of the elapsed season**
+   (`MIN_COVERAGE_PCT`, `jobs/helpers/cohorts.ts`). ÜTGS and the hours-above counters are
+   cumulative, so a room measured for three days is not a small value — it is a zero, and enough
+   of them drag the published median to 0 no matter how hot the fully-observed rooms were.
+   ADR-0002 forbids extrapolating a short window up to a season, so the honest alternative is to
+   leave the room out until it has history. Tier-1 keeps every room (it is the donor's own data,
+   shown with its coverage %). The floor is applied **before** k is counted, so thin rooms can
+   never help a cell clear the threshold. Consequence: early in a season, or after a wave of new
+   donors, `k` is counted over a much smaller pool and the public layer may legitimately show
+   nothing.
+5. **Resident reference (at-rest floor) — Zensus 2022 grid → precomputed safe-cell bitmask.**
    A one-time **server-side build** ingests the Zensus population grid and emits a tiny bitmask
    of "population ≥ T?" per cell. At **T = 25,000** the 1 km mask is effectively all-false (never
    used), so the shipped artifact reduces to a **10 km safe-mask (<1 KB)**; anything not set
@@ -94,6 +104,10 @@ from the target above, all tracked as follow-ups:
   at-rest guarantee still needs the bitmask generator and the client-side membership test.
 - **k=10 with merge-up is implemented**: sub-threshold cells roll up the hierarchy and are never
   written; if even the national cell has < 10 donors, nothing is published.
+- **The coverage floor currently suppresses the whole public layer.** As of 2026-07-30, 123
+  room-seasons exist but only 17 rooms from 5 donors clear 50 % coverage, so no cell reaches
+  k=10 and Tier-2 is empty by design. Publishing resumes once ~10 donors have a substantial
+  share of the season, not just a few days.
 - **Storage engine is libSQL/SQLite (Bunny DB), not TimescaleDB.** No hypertable / continuous
   aggregates; recompute is a full batch rebuild of both tiers in one transaction, which suits the
   low hourly volume. Revisit if raw volume outgrows single-node SQLite.
