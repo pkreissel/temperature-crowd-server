@@ -33,11 +33,11 @@ export async function processYear(
       FROM readings r
       JOIN params ON unixepoch(r.ts) * 1000 >= params.start_ms AND unixepoch(r.ts) * 1000 < params.end_ms
       LEFT JOIN donor_metadata dm ON r.donor_id = dm.donor_id
-      WHERE COALESCE(dm.has_ac, 0) = 0
+      WHERE COALESCE(dm.has_ac, 0) = 0 AND r.temp_c != 0
     ),
     hourly AS (
       SELECT
-        donor_id, device_id, MAX(postal_code) AS postal_code, MAX(room_ref) AS room_ref,
+        donor_id, device_id, room_ref, MAX(postal_code) AS postal_code,
         strftime('%Y-%m-%d %H:00:00', ts) AS hour_bucket,
         CASE
           WHEN CAST(strftime('%H', ts) AS INTEGER) >= 22 OR CAST(strftime('%H', ts) AS INTEGER) < 7
@@ -46,7 +46,7 @@ export async function processYear(
         END AS night_key,
         AVG(temp_c) AS mean, MAX(COALESCE(temp_c_max, temp_c)) AS peak
       FROM raw_in_window
-      GROUP BY donor_id, device_id, hour_bucket
+      GROUP BY donor_id, device_id, room_ref, hour_bucket
     ),
     room_meta AS (
       SELECT
@@ -64,16 +64,16 @@ export async function processYear(
       FROM (SELECT donor_id, device_id, MAX(postal_code) as postal_code FROM hourly GROUP BY donor_id, device_id)
     ),
     nightly AS (
-      SELECT donor_id, device_id, night_key, MIN(mean) AS min_mean
-      FROM hourly WHERE night_key IS NOT NULL GROUP BY donor_id, device_id, night_key
+      SELECT donor_id, device_id, room_ref, night_key, MIN(mean) AS min_mean
+      FROM hourly WHERE night_key IS NOT NULL GROUP BY donor_id, device_id, room_ref, night_key
     ),
     tropical_counts AS (
-      SELECT donor_id, device_id, SUM(CASE WHEN min_mean > 25 THEN 1 ELSE 0 END) AS tropical_nights
-      FROM nightly GROUP BY donor_id, device_id
+      SELECT donor_id, device_id, room_ref, SUM(CASE WHEN min_mean > 25 THEN 1 ELSE 0 END) AS tropical_nights
+      FROM nightly GROUP BY donor_id, device_id, room_ref
     ),
     aggregated AS (
       SELECT
-        h.donor_id, h.device_id, MAX(h.postal_code) AS postal_code, MAX(h.room_ref) AS room_ref,
+        h.donor_id, h.device_id, h.room_ref, MAX(h.postal_code) AS postal_code,
         COUNT(h.hour_bucket) AS observed_hours, MAX(m.ref_temp) AS ref_temp, MAX(m.region_id) AS region_id,
         SUM(CASE WHEN h.mean > m.ref_temp THEN h.mean - m.ref_temp ELSE 0 END) AS utgs_kh,
         SUM(CASE WHEN h.peak > m.ref_temp THEN h.peak - m.ref_temp ELSE 0 END) AS utgs_kh_peak,
@@ -82,10 +82,12 @@ export async function processYear(
         SUM(CASE WHEN h.mean > 30 THEN 1 ELSE 0 END) AS hours_above_30,
         MAX(h.peak) AS max_temp
       FROM hourly h JOIN room_meta m ON h.donor_id = m.donor_id AND h.device_id = m.device_id
-      GROUP BY h.donor_id, h.device_id
+      GROUP BY h.donor_id, h.device_id, h.room_ref
     )
     SELECT a.*, COALESCE(t.tropical_nights, 0) AS tropical_nights
-    FROM aggregated a LEFT JOIN tropical_counts t ON a.donor_id = t.donor_id AND a.device_id = t.device_id;
+    FROM aggregated a
+    LEFT JOIN tropical_counts t
+      ON a.donor_id = t.donor_id AND a.device_id = t.device_id AND a.room_ref = t.room_ref;
   `;
 
   const res = await query.execute(db);
@@ -93,7 +95,7 @@ export async function processYear(
   for (const row of res.rows) {
     if (row.observed_hours === 0) continue; // safety check
     
-    const key = `${row.donor_id} ${row.device_id}`;
+    const key = `${row.donor_id} ${row.device_id} ${row.room_ref}`;
     let arr = rawMetricsByRoom.get(key);
     if (!arr) {
       arr = [];
