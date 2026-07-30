@@ -1,6 +1,6 @@
 import { db, Tier1RoomMetric, Tier2PublicCohort } from '../db';
 import { SEASON_START_MONTH, SEASON_END_MONTH } from './helpers/metrics';
-import { EnrichedTier1, K_THRESHOLD, buildCohortsForSeason } from './helpers/cohorts';
+import { EnrichedTier1, K_THRESHOLD, MIN_COVERAGE_PCT, buildCohortsForSeason } from './helpers/cohorts';
 import { processYear } from './helpers/sql_aggregations';
 import { sql } from 'kysely';
 
@@ -66,9 +66,17 @@ export async function runRecomputeJob(): Promise<void> {
 
   await persistTiers(tier1, tier2);
 
+  const eligible = tier1.filter((m) => m.coverage_pct >= MIN_COVERAGE_PCT).length;
+  const donorsEligible = new Set(
+    tier1.filter((m) => m.coverage_pct >= MIN_COVERAGE_PCT).map((m) => m.donor_id),
+  ).size;
   const suppressed = bySeason.size > 0 && tier2.length === 0;
   console.log(
-    `Recompute done: ${tier1.length} room-seasons, ${tier2.length} published cohorts` +
-      (suppressed ? ` (all cells below k=${K_THRESHOLD}, nothing published)` : ''),
+    `Recompute done: ${tier1.length} room-seasons ` +
+      `(${eligible} at >=${MIN_COVERAGE_PCT}% coverage, from ${donorsEligible} donors), ` +
+      `${tier2.length} published cohorts` +
+      (suppressed
+        ? ` (no cell reached k=${K_THRESHOLD} among coverage-eligible rooms, nothing published)`
+        : ''),
   );
 }
