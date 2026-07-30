@@ -89,6 +89,16 @@ export interface DatabaseSchema {
 
 const dbUrl = process.env.DATABASE_URL || 'file:temperaturcrowd.db';
 
+// Hard stop: VITEST is set by the test runner for every test process, regardless of what
+// dotenv loaded from .env. Tests must never be able to reach a remote/production database,
+// even if apps/api/.env has real production credentials in it.
+if (process.env.VITEST && !dbUrl.startsWith('file:')) {
+  throw new Error(
+    `Refusing to run tests against non-local DATABASE_URL "${dbUrl}". ` +
+      `Tests must use a local file: database — check that .env.test is being loaded and overrides .env.`,
+  );
+}
+
 const libsqlClient = createClient({
   url: dbUrl,
   authToken: process.env.DATABASE_AUTH_TOKEN,
