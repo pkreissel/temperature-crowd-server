@@ -52,12 +52,19 @@ export async function runRecomputeJob(): Promise<void> {
       // Room is missing data for at least one year in globalYears, so it's not present in ALL years.
       continue;
     }
+
+    // A room must meet the coverage threshold in EVERY year to be included in the public cohort.
+    // This ensures exactly one cohort of the same donors is tracked across all years.
+    const eligibleForTier2 = arr.every(e => e.metric.coverage_pct >= MIN_COVERAGE_PCT);
+
     for (const enriched of arr) {
       tier1.push(enriched.metric);
-      const season = enriched.metric.season;
-      const bucket = bySeason.get(season) ?? [];
-      bucket.push(enriched);
-      bySeason.set(season, bucket);
+      if (eligibleForTier2) {
+        const season = enriched.metric.season;
+        const bucket = bySeason.get(season) ?? [];
+        bucket.push(enriched);
+        bySeason.set(season, bucket);
+      }
     }
   }
 

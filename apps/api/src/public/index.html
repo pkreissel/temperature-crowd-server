@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TemperaturCrowd Data</title>
+  <title>TemperaturCrowd Daten</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
@@ -149,57 +149,57 @@
 <body>
   <div class="container">
     <header>
-      <h1>TemperaturCrowd Data Portal</h1>
-      <p class="subtitle">Public Overheating Metrics and Integration Details</p>
+      <h1>TemperaturCrowd Datenportal</h1>
+      <p class="subtitle">Öffentliche Überhitzungsmetriken und Integrationsdetails</p>
     </header>
 
-    <div id="loading" class="loading">Loading data from API...</div>
+    <div id="loading" class="loading">Lade Daten von der API...</div>
     
     <div id="dashboard-content" style="display:none;">
       
-      <h2 class="section-title">Aggregate Metrics</h2>
+      <h2 class="section-title">Aggregierte Metriken</h2>
       <div class="kpi-grid">
         <div class="kpi-card">
-          <div class="kpi-label">Active Donors</div>
+          <div class="kpi-label">Aktive Spender</div>
           <div class="kpi-val" id="kpi-donors">-</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-label">Cohorts Tracked</div>
+          <div class="kpi-label">Erfasste Kohorten</div>
           <div class="kpi-val" id="kpi-cohorts">-</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-label">Avg. Max Temp</div>
+          <div class="kpi-label">Durchschn. Max. Temp.</div>
           <div class="kpi-val" id="kpi-temp">-</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-label">Datapoints Collected</div>
+          <div class="kpi-label">Gesammelte Datenpunkte</div>
           <div class="kpi-val" id="kpi-readings">-</div>
         </div>
       </div>
 
-      <h2 class="section-title">Summer Overheating (Hours > 26°C)</h2>
+      <h2 class="section-title">Sommerliche Überhitzung (Stunden > 26°C)</h2>
       <div class="card">
         <div id="no-data-msg" style="display: none; color: var(--muted-text); padding: 2rem; text-align: center;">
-          Not enough data yet. A cell is only published once at least 10 donors have contributed
-          rooms covering at least half of the season — a room measured for a few days would
-          otherwise drag the published figures towards zero.
+          Noch nicht genügend Daten. Eine Zelle wird erst veröffentlicht, wenn mindestens 10 Spender
+          Räume beigesteuert haben, die mindestens die Hälfte der Saison abdecken — ein nur wenige Tage gemessener Raum würde
+          sonst die veröffentlichten Zahlen gegen Null ziehen.
         </div>
         <div class="chart-container" id="chart-wrapper">
           <canvas id="overheatingChart"></canvas>
         </div>
       </div>
 
-      <h2 class="section-title">Cohort Data Table</h2>
+      <h2 class="section-title">Kohorten-Datentabelle</h2>
       <div class="card" style="overflow-x: auto;" id="table-wrapper">
         <table id="dataTable">
           <thead>
             <tr>
-              <th>Cohort ID</th>
-              <th>Sample Size (k)</th>
-              <th>Avg UTGS (kh)</th>
-              <th>Avg Hours > 26°C</th>
-              <th>Avg Max Temp (°C)</th>
-              <th>Last Updated</th>
+              <th>Kohorten-ID</th>
+              <th>Stichprobengröße (k)</th>
+              <th>Durchschn. UTGS (kh)</th>
+              <th>Durchschn. Stunden > 26°C</th>
+              <th>Durchschn. Max. Temp. (°C)</th>
+              <th>Zuletzt aktualisiert</th>
             </tr>
           </thead>
           <tbody>
@@ -212,12 +212,12 @@
     <h2 class="section-title">Home Assistant Integration</h2>
     <div class="card">
       <ol class="instruction-list">
-        <li>Open <strong>HACS</strong> (Home Assistant Community Store) in your Home Assistant instance.</li>
-        <li>Click the three dots (top right), select <strong>Custom repositories</strong>.</li>
-        <li>Add <code>https://github.com/pkreissel/temperature-crowd-hacs</code> with the category <strong>Integration</strong>.</li>
-        <li>Search for <strong>TemperaturCrowd</strong> in HACS and click <strong>Download</strong>.</li>
-        <li>Restart Home Assistant.</li>
-        <li>Navigate to <strong>Settings &gt; Devices &amp; Services &gt; Add Integration</strong>, search for <strong>TemperaturCrowd</strong>, and follow the setup.</li>
+        <li>Öffnen Sie <strong>HACS</strong> (Home Assistant Community Store) in Ihrer Home Assistant-Instanz.</li>
+        <li>Klicken Sie auf die drei Punkte (oben rechts) und wählen Sie <strong>Benutzerdefinierte Repositories</strong>.</li>
+        <li>Fügen Sie <code>https://github.com/pkreissel/temperature-crowd-hacs</code> mit der Kategorie <strong>Integration</strong> hinzu.</li>
+        <li>Suchen Sie in HACS nach <strong>TemperaturCrowd</strong> und klicken Sie auf <strong>Herunterladen</strong>.</li>
+        <li>Starten Sie Home Assistant neu.</li>
+        <li>Navigieren Sie zu <strong>Einstellungen &gt; Geräte &amp; Dienste &gt; Integration hinzufügen</strong>, suchen Sie nach <strong>TemperaturCrowd</strong> und folgen Sie der Einrichtung.</li>
       </ol>
     </div>
 
@@ -256,11 +256,10 @@
           tbody.appendChild(tr);
         });
 
-        // Handle empty state due to k-anonymity threshold
         if (data.cohorts.length === 0) {
           document.getElementById('no-data-msg').style.display = 'block';
           document.getElementById('chart-wrapper').style.display = 'none';
-          document.getElementById('table-wrapper').innerHTML = '<div style="color: var(--muted-text); padding: 2rem; text-align: center;">Insufficient data for public table display.</div>';
+          document.getElementById('table-wrapper').innerHTML = '<div style="color: var(--muted-text); padding: 2rem; text-align: center;">Unzureichende Daten für die öffentliche Tabellenanzeige.</div>';
           return;
         }
 
@@ -274,7 +273,7 @@
           data: {
             labels: data.cohorts.map(c => c.cohort_id),
             datasets: [{
-              label: 'Avg Hours > 26°C',
+              label: 'Durchschn. Stunden > 26°C',
               data: data.cohorts.map(c => c.avg_hours_above_26),
               backgroundColor: '#0d6efd',
               maxBarThickness: 50
@@ -299,7 +298,7 @@
         });
 
       } catch (error) {
-        document.getElementById('loading').textContent = 'Failed to load data. The API might be unreachable.';
+        document.getElementById('loading').textContent = 'Fehler beim Laden der Daten. Die API ist möglicherweise nicht erreichbar.';
         document.getElementById('loading').style.color = '#dc3545';
       }
     }
