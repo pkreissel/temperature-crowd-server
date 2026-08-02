@@ -15,6 +15,37 @@ async function persistTiers(tier1: Tier1RoomMetric[], tier2: Tier2PublicCohort[]
   });
 }
 
+function buildTiersFromRawMetrics(
+  rawMetricsByRoom: Map<string, EnrichedTier1[]>,
+  globalYearsLength: number,
+): { tier1: Tier1RoomMetric[]; bySeason: Map<string, EnrichedTier1[]> } {
+  const tier1: Tier1RoomMetric[] = [];
+  const bySeason = new Map<string, EnrichedTier1[]>();
+
+  for (const arr of rawMetricsByRoom.values()) {
+    if (arr.length !== globalYearsLength) {
+      // Room is missing data for at least one year in globalYears, so it's not present in ALL years.
+      continue;
+    }
+
+    // A room must meet the coverage threshold in EVERY year to be included in the public cohort.
+    // This ensures exactly one cohort of the same donors is tracked across all years.
+    const eligibleForTier2 = arr.every((e) => e.metric.coverage_pct >= MIN_COVERAGE_PCT);
+
+    for (const enriched of arr) {
+      tier1.push(enriched.metric);
+      if (eligibleForTier2) {
+        const season = enriched.metric.season;
+        const bucket = bySeason.get(season) ?? [];
+        bucket.push(enriched);
+        bySeason.set(season, bucket);
+      }
+    }
+  }
+
+  return { tier1, bySeason };
+}
+
 export async function runRecomputeJob(): Promise<void> {
   console.log('Starting batch recompute job (SQL optimized)...');
 
@@ -44,29 +75,7 @@ export async function runRecomputeJob(): Promise<void> {
     await processYear(year, nowDate, rawMetricsByRoom);
   }
   
-  const tier1: Tier1RoomMetric[] = [];
-  const bySeason = new Map<string, EnrichedTier1[]>();
-
-  for (const arr of rawMetricsByRoom.values()) {
-    if (arr.length !== globalYears.length) {
-      // Room is missing data for at least one year in globalYears, so it's not present in ALL years.
-      continue;
-    }
-
-    // A room must meet the coverage threshold in EVERY year to be included in the public cohort.
-    // This ensures exactly one cohort of the same donors is tracked across all years.
-    const eligibleForTier2 = arr.every(e => e.metric.coverage_pct >= MIN_COVERAGE_PCT);
-
-    for (const enriched of arr) {
-      tier1.push(enriched.metric);
-      if (eligibleForTier2) {
-        const season = enriched.metric.season;
-        const bucket = bySeason.get(season) ?? [];
-        bucket.push(enriched);
-        bySeason.set(season, bucket);
-      }
-    }
-  }
+  const { tier1, bySeason } = buildTiersFromRawMetrics(rawMetricsByRoom, globalYears.length);
 
   const tier2: Tier2PublicCohort[] = [];
   for (const [season, entries] of bySeason) tier2.push(...buildCohortsForSeason(season, entries));
